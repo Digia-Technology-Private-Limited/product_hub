@@ -459,52 +459,51 @@ When `cartItemCount` changes, text updates automatically.
 
 ### Native Reactive Updates
 
-Use `ValueNotifier` or `StreamBuilder` for native screens that react to DUIAppState changes:
+Use `StreamSubscription` or `StreamBuilder` for native screens that react to DUIAppState changes:
 
 ```dart
-class CartBadge extends StatefulWidget {
-  @override
-  _CartBadgeState createState() => _CartBadgeState();
+class CartManager {
+  static void addToCart(Product product) {
+    // Update native state
+    cart.add(product);
+    
+    // Sync with Digia UI
+    DUIAppState().update('cartCount', cart.length);
+    DUIAppState().update('cartTotal', cart.totalAmount);
+    DUIAppState().update('cartItems', cart.items.map((e) => e.toJson()).toList());
+  }
 }
 
-class _CartBadgeState extends State<CartBadge> {
-  late final ValueNotifier<int> _cartCount;
+// Listen in Flutter
+class MyWidget extends StatefulWidget {
+  @override
+  _MyWidgetState createState() => _MyWidgetState();
+}
+
+class _MyWidgetState extends State<MyWidget> {
   late StreamSubscription _subscription;
 
   @override
   void initState() {
     super.initState();
-
-    final initialCount = DUIAppState().getValue('cartItemCount') ?? 0;
-    _cartCount = ValueNotifier(initialCount);
-
-    // Listen for DUIAppState changes
-    _subscription = DUIAppState().listen('cartItemCount', (value) {
-      _cartCount.value = value ?? 0;
+    
+    _subscription = DUIAppState().listen('cartCount', (value) {
+      setState(() {
+        // Update UI
+      });
     });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<int>(
-      valueListenable: _cartCount,
-      builder: (context, count, _) {
-        return Badge(
-          label: Text('$count'),
-          child: IconButton(
-            icon: Icon(Icons.shopping_cart),
-            onPressed: () => Navigator.pushNamed(context, '/cart'),
-          ),
-        );
-      },
-    );
   }
 
   @override
   void dispose() {
     _subscription.cancel();
-    _cartCount.dispose();
     super.dispose();
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    final count = DUIAppState().getValue('cartCount') ?? 0;
+    return Badge(label: Text('$count'), child: Icon(Icons.shopping_cart));
   }
 }
 ```

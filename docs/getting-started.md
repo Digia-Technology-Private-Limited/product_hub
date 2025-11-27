@@ -95,7 +95,7 @@ fvm flutter run
    - Place them in the `assets/` directory
 
 3. **Custom widgets not appearing**
-   - Ensure `registerDeliveryTypeStatusCustomWidgets()` is called after SDK init
+   - Ensure `registerDeliveryTypeStatusCustomWidgets()` is called after SDK initialization and within the context of `DigiaUIAppBuilder` or `DigiaUIApp`
    - Check the widget ID matches in Digia Studio
 
 ### Debug Tips
