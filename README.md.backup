@@ -1,0 +1,283 @@
+# ProductHub Demo - Comprehensive Digia SDK Integration
+
+A full-featured e-commerce demo app showcasing **all Digia UI SDK integration patterns and use cases**.
+
+## 🎯 What This Demo Covers
+
+This example demonstrates every major SDK integration scenario:
+
+### Integration Patterns (All 3 Modes)
+- ✅ **Full Digia App** - Entire UI from Digia Studio
+- ✅ **Hybrid Mode** - Native Flutter + Digia pages mixed
+- ✅ **Component Embedding** - Digia components in native screens
+
+### Flavors & Init Strategies (Complete Coverage)
+- ✅ `Flavor.debug` with branch switching
+- ✅ `Flavor.staging` for QA
+- ✅ `Flavor.versioned` for A/B testing
+- ✅ `Flavor.release` with NetworkFirst / CacheFirst / LocalFirst strategies
+
+### State Management (All Patterns)
+- ✅ Global state via `DUIAppState()`
+- ✅ Page-level state
+- ✅ Component state
+- ✅ Reactive updates with `StreamBuilder`
+- ✅ Bidirectional sync (Native ↔ Digia)
+
+### Third-Party SDKs
+- ✅ Firebase Analytics (event tracking)
+- ✅ Firebase Auth (login/logout)
+- ✅ Gokwik Payment (checkout flow)
+- ✅ Firebase Messaging (push notifications)
+- ✅ Sentry (crash reporting)
+- ✅ Dio (HTTP client with env-based URLs)
+- ✅ Shared Preferences (local storage)
+
+### Advanced Features
+- ✅ Custom widgets registration
+- ✅ Environment variables
+- ✅ Custom resources (icons, images, fonts)
+- ✅ Message bus for Native ↔ Digia communication
+- ✅ Analytics integration
+- ✅ Deep linking support
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Flutter SDK ≥ 2.18.0
+- Digia Studio account and access key
+- Firebase project (optional, for analytics/auth)
+
+### Installation
+
+1. **Navigate to the project directory:**
+   ```bash
+   cd /Users/ram/Digia/product_hub
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   flutter pub get
+   ```
+
+3. **Configure access key:**
+   
+   Option A: Use dart-define (recommended):
+   ```bash
+   flutter run --dart-define=DIGIA_ACCESS_KEY=your_access_key_here
+   ```
+   
+   Option B: Edit `lib/config/app_config.dart`:
+   ```dart
+   static const String devAccessKey = 'YOUR_DEV_ACCESS_KEY';
+   static const String prodAccessKey = 'YOUR_PROD_ACCESS_KEY';
+   ```
+
+4. **Run the app:**
+   ```bash
+   # Debug mode (default)
+   flutter run
+   
+   # With specific environment
+   flutter run --dart-define=ENV=staging
+   
+   # Production mode
+   flutter run --dart-define=ENV=prod --dart-define=DIGIA_ACCESS_KEY=prod_key
+   ```
+
+## 📋 Integration Modes
+
+### Mode 1: Full Digia App
+Entire app UI managed by Digia Studio. Perfect for maximum flexibility and OTA updates.
+
+```dart
+// Set in lib/config/app_config.dart
+static const IntegrationMode mode = IntegrationMode.fullDigia;
+```
+
+**Features:**
+- All screens loaded from Digia Studio
+- Zero native UI code
+- Complete OTA update capability
+
+### Mode 2: Hybrid Mode
+Mix of native Flutter screens and Digia pages. Best for gradual migration or specific native requirements.
+
+```dart
+static const IntegrationMode mode = IntegrationMode.hybrid;
+```
+
+**Features:**
+- Native splash/onboarding
+- Digia-powered catalog, search, product pages
+- Native profile/settings
+- Seamless navigation between native and Digia
+
+### Mode 3: Component Embedding
+Native Flutter app embedding specific Digia components. Ideal for enhancing existing apps.
+
+```dart
+static const IntegrationMode mode = IntegrationMode.componentEmbedding;
+```
+
+**Features:**
+- Fully native app structure
+- Digia components for specific widgets (product cards, filters, etc.)
+- Maximum control over app architecture
+
+## 🎨 Example Flows
+
+### State Bridging Example
+
+**From Native to Digia:**
+```dart
+// After user logs in
+DUIAppState().setValue('user', {
+  'id': user.id,
+  'name': user.name,
+  'email': user.email,
+  'avatar': user.avatarUrl,
+});
+DUIAppState().setValue('isLoggedIn', true);
+```
+
+**From Digia to Native:**
+```dart
+// Listen to cart updates
+DUIAppState().listen('cartCount', (count) {
+  setState(() => _cartBadgeCount = count);
+});
+```
+
+### Payment Flow via Message Bus
+
+**In Digia Studio (Action):**
+```json
+{
+  "action": "callExternalMethod",
+  "channel": "start_payment",
+  "data": {
+    "amount": "${totalPrice}",
+    "orderId": "${orderId}"
+  }
+}
+```
+
+**In Native Code:**
+```dart
+class AppMessageBus implements MessageBus {
+  @override
+  void send(String channel, dynamic message) async {
+    if (channel == 'start_payment') {
+      final result = await GokwikPaymentAdapter().startPayment(message);
+      DUIAppState().setValue('paymentResult', result);
+    }
+  }
+}
+```
+
+### Custom Widget Registration
+
+```dart
+// Register native widgets for use in Digia
+DigiaUIOptions(
+  customWidgets: {
+    'native_map': (data) => GoogleMapWidget(location: data['location']),
+    'native_chart': (data) => ChartWidget(data: data['chartData']),
+  },
+)
+```
+
+## 🔧 Flavor Configuration
+
+### Development (Debug)
+```bash
+flutter run --dart-define=ENV=dev --dart-define=BRANCH=main
+```
+- Real-time updates from server
+- Hot reload support
+- Branch-specific testing
+
+### Staging
+```bash
+flutter run --dart-define=ENV=staging
+```
+- Stable configuration for QA
+- Pre-production testing
+- Remote updates enabled
+
+### Production (Release)
+```bash
+# 1. Download assets from Digia Studio
+# 2. Place in app/assets/
+# 3. Build:
+flutter build apk --release --dart-define=ENV=prod --dart-define=DIGIA_ACCESS_KEY=prod_key
+
+# Or use script:
+./scripts/build-release.sh
+```
+
+## 📁 Project Structure
+
+```
+product_hub/
+├── lib/
+│   ├── main.dart                    # Entry point with mode switching
+│   ├── config/
+│   │   ├── app_config.dart          # App configuration & flavor helper
+│   │   ├── digia_config.dart        # Digia initialization logic
+│   │   └── environment.dart         # API endpoints per environment
+│   ├── dummy_adapters/
+│   │   ├── analytics_adapter.dart   # Firebase Analytics integration
+│   │   ├── auth_adapter.dart        # Firebase Auth integration
+│   │   ├── message_bus_adapter.dart # Message bus implementation
+│   │   └── payment_adapter.dart     # Gokwik payment integration
+│   ├── screens/
+│   │   ├── splash_screen.dart       # Native splash
+│   │   ├── onboarding_screen.dart   # Native onboarding
+│   │   ├── native_cart_screen.dart  # Hybrid: Native + Digia components
+│   │   └── profile_screen.dart      # Native profile
+│   ├── services/
+│   │   ├── api_service.dart         # API client with Dio
+│   │   ├── auth_service.dart        # Authentication service
+│   │   └── storage_service.dart     # Local storage wrapper
+│   └── widgets/                     # Reusable native widgets
+├── assets/
+│   ├── app_config.json              # Digia config (download from Studio)
+│   └── functions.json               # JS functions (download from Studio)
+├── docs/
+│   ├── getting-started.md           # Setup guide
+│   ├── flavors-guide.md             # Flavor configuration details
+│   ├── state-management.md          # State patterns explained
+│   ├── third-party-sdks.md          # SDK integration guides
+│   └── troubleshooting.md           # Common issues
+├── scripts/
+│   ├── build-debug.sh               # Build debug variant
+│   ├── build-staging.sh             # Build staging variant
+│   └── build-release.sh             # Build production release
+├── pubspec.yaml
+└── README.md                        # This file
+```
+
+## 📚 Documentation
+
+- [Getting Started Guide](docs/getting-started.md) - Detailed setup instructions
+- [Flavors Guide](docs/flavors-guide.md) - Environment and flavor configuration
+- [State Management](docs/state-management.md) - State patterns and examples
+- [Third-Party SDKs](docs/third-party-sdks.md) - SDK integration guides
+- [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
+
+## 🔗 Links
+
+- [Digia Documentation](../../../jargon/sdk-integration-flutter/getting-started.md)
+- [Digia Studio](https://app.digia.tech)
+- [Flutter Documentation](https://flutter.dev/docs)
+
+## 📄 License
+
+This example is provided for demonstration purposes. See LICENSE for details.
+
+## 💬 Support
+
+- 📧 Email: admin@digia.tech
+- 📖 Docs: https://docs.digia.tech

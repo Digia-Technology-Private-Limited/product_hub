@@ -1,0 +1,96 @@
+flutter/ephemeral/
+
+# Visual Studio user-specific files.
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Visual Studio build-related files.
+x64/
+x86/
+
+# Visual Studio cache files
+# files ending in .cache can be ignored
+*.[Cc]ache
+# but keep track of directories ending in .cache
+!*.[Cc]ache/
+
+# Windows executables and libraries
+*.exe
+*.dll
+*.lib
+*.pdb
+*.exp
+*.ilk
+*.obj
+*.res
+*.manifest
+
+# Windows system files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Windows temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+
+# Windows installer files
+*.msi
+*.msm
+*.msp
+*.cab
+
+# Windows crash dumps
+*.dmp
+*.hdmp
+*.mdmp
+
+# Windows error reports
+*.wer
+
+# Windows prefetch files
+*.pf
+
+# Windows recent documents
+*.lnk
+
+# Windows virtual store
+/AppData/Local/VirtualStore/
+
+# Windows application logs
+*.log
+*.etl
+
+# Windows minidumps
+*.mdmp
+
+# Windows symbol files
+*.sym
+
+# Windows debug files
+*.dbg
+
+# Windows performance monitor files
+*.blg
+*.etl
+
+# Windows event trace logs
+*.etl
+
+# Windows memory dumps
+*.dmp
+
+# Windows system restore points
+System Volume Information/
+
+# Windows pagefile
+pagefile.sys
+swapfile.sys
+hiberfil.sys
