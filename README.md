@@ -129,13 +129,13 @@ Register native Flutter widgets for use in Digia Studio. Use only when Digia UI 
 **From Native to Digia:**
 ```dart
 // After user logs in
-DUIAppState().setValue('user', {
+DUIAppState().update('user', {
   'id': user.id,
   'name': user.name,
   'email': user.email,
   'avatar': user.avatarUrl,
 });
-DUIAppState().setValue('isLoggedIn', true);
+DUIAppState().update('isLoggedIn', true);
 ```
 
 **From Digia to Native:**
