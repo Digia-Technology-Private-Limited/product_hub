@@ -117,7 +117,7 @@ class _CartHandlerState extends State<CartHandler> with DigiaMessageHandlerMixin
       
       // Update global cart count
       final currentCount = DUIAppState().getValue('cartItemCount') ?? 0;
-      DUIAppState().setValue('cartItemCount', currentCount + 1);
+      DUIAppState().update('cartItemCount', currentCount + 1);
       
       // Call API to add to cart
       await apiService.addToCart(productId: productId, quantity: 1);
@@ -195,8 +195,8 @@ Future<void> signIn(String email, String password) async {
   final user = await _authAdapter.signIn(email, password);
   
   // Sync to DUIAppState
-  DUIAppState().setValue('user', user);
-  DUIAppState().setValue('isLoggedIn', true);
+  DUIAppState().update('user', user);
+  DUIAppState().update('isLoggedIn', true);
   
   _analytics.setUserId(userId: user['id']);
 }
@@ -223,8 +223,8 @@ Future<void> signOut() async {
   await _authAdapter.signOut();
   
   // Clear from DUIAppState
-  DUIAppState().setValue('user', null);
-  DUIAppState().setValue('isLoggedIn', false);
+  DUIAppState().update('user', null);
+  DUIAppState().update('isLoggedIn', false);
 }
 ```
 
@@ -251,7 +251,7 @@ class _CartManagerState extends State<CartManager> with DigiaMessageHandlerMixin
       
       // Update DUIAppState (accessible by native + Digia)
       final currentCount = DUIAppState().getValue('cartItemCount') ?? 0;
-      DUIAppState().setValue('cartItemCount', currentCount + 1);
+      DUIAppState().update('cartItemCount', currentCount + 1);
       
       // Log analytics
       analytics.logEvent(name: 'add_to_cart', parameters: {'product_id': productId});
@@ -325,34 +325,34 @@ class _HomeState extends State<Home> with DigiaMessageHandlerMixin {
 
 ```dart
 // When user logs in
-DUIAppState().setValue('user', userData);
-DUIAppState().setValue('isLoggedIn', true);
-DUIAppState().setValue('authToken', token);
+DUIAppState().update('user', userData);
+DUIAppState().update('isLoggedIn', true);
+DUIAppState().update('authToken', token);
 
 // When user logs out
-DUIAppState().setValue('user', null);
-DUIAppState().setValue('isLoggedIn', false);
-DUIAppState().setValue('authToken', null);
+DUIAppState().update('user', null);
+DUIAppState().update('isLoggedIn', false);
+DUIAppState().update('authToken', null);
 ```
 
 ### Pattern 2: API Data
 
 ```dart
 // Before API call
-DUIAppState().setValue('products', []);
-DUIAppState().setValue('productsLoading', true);
+DUIAppState().update('products', []);
+DUIAppState().update('productsLoading', true);
 
 // After API call
 final products = await apiService.getProducts();
-DUIAppState().setValue('products', products);
-DUIAppState().setValue('productsLoading', false);
+DUIAppState().update('products', products);
+DUIAppState().update('productsLoading', false);
 ```
 
 ### Pattern 3: Feature Flags
 
 ```dart
 // Set feature flags
-DUIAppState().setValue('features', {
+DUIAppState().update('features', {
   'newCheckout': true,
   'socialLogin': false,
   'darkMode': true,
@@ -366,13 +366,13 @@ DUIAppState().setValue('features', {
 
 ```dart
 // Theme
-DUIAppState().setValue('theme', 'dark');
+DUIAppState().update('theme', 'dark');
 
 // Language
-DUIAppState().setValue('language', 'en');
+DUIAppState().update('language', 'en');
 
 // Notifications
-DUIAppState().setValue('notificationsEnabled', true);
+DUIAppState().update('notificationsEnabled', true);
 ```
 
 ---
@@ -422,13 +422,13 @@ void main() async {
       // Restore user
       final user = storage.getUser();
       if (user != null) {
-        DUIAppState().setValue('user', user);
-        DUIAppState().setValue('isLoggedIn', true);
+        DUIAppState().update('user', user);
+        DUIAppState().update('isLoggedIn', true);
       }
       
       // Restore theme
       final theme = storage.getThemeMode();
-      DUIAppState().setValue('theme', theme);
+      DUIAppState().update('theme', theme);
       
       return MyApp();
     },
@@ -566,13 +566,13 @@ print('Current state - User: ${DUIAppState().getValue('user')}, Cart: ${DUIAppSt
 
 ✅ **Good:**
 ```dart
-DUIAppState().setValue('userId', 'user_123');
-DUIAppState().setValue('userName', 'John Doe');
+DUIAppState().update('userId', 'user_123');
+DUIAppState().update('userName', 'John Doe');
 ```
 
 ❌ **Bad:**
 ```dart
-DUIAppState().setValue('user.profile.details.name', 'John Doe');
+DUIAppState().update('user.profile.details.name', 'John Doe');
 ```
 
 ### 3. Sync State Immediately
@@ -580,7 +580,7 @@ DUIAppState().setValue('user.profile.details.name', 'John Doe');
 ✅ **Good:**
 ```dart
 await signIn(email, password);
-DUIAppState().setValue('user', user); // Right after login
+DUIAppState().update('user', user); // Right after login
 ```
 
 ❌ **Bad:**
@@ -594,9 +594,9 @@ await signIn(email, password);
 ✅ **Good:**
 ```dart
 await signOut();
-DUIAppState().setValue('user', null);
-DUIAppState().setValue('authToken', null);
-DUIAppState().setValue('cartItemCount', 0);
+DUIAppState().update('user', null);
+DUIAppState().update('authToken', null);
+DUIAppState().update('cartItemCount', 0);
 ```
 
 ---

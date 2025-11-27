@@ -7,20 +7,18 @@ Complete guide to Digia flavors, environments, and initialization strategies.
 ProductHub demo supports:
 - **4 Flavors:** debug, staging, versioned, release
 - **3 Environments:** development, staging, production
-- **3 Init Strategies:** NetworkFirst, CacheFirst, LocalFirst
+- **2 Init Methods:** DigiaUIAppBuilder, Manual + DigiaUIApp
 
 ## Flavors
 
 ### Debug Flavor
 
-**Purpose:** Local development with hot reload
+**Purpose:** Local development with debugging features
 
 **Features:**
-- Loads config from local dev server
-- Hot reload enabled
-- Debug logging verbose
-- No asset caching
-- Local backend API
+- Development environment with full debugging
+- Branch and environment tracking
+- Development overlays and tools
 
 **When to use:**
 - Daily development
@@ -36,10 +34,8 @@ flutter run --dart-define=ENV=dev
 ```dart
 // In digia_config.dart
 Flavor.debug(
-  studioUrl: 'http://localhost:3000/api',
-  enableHotReload: true,
-  logLevel: LogLevel.verbose,
-  cachingEnabled: false,
+  branchName: AppConfig.branch,
+  environment: AppConfig.environment,
 );
 ```
 
@@ -47,14 +43,12 @@ Flavor.debug(
 
 ### Staging Flavor
 
-**Purpose:** QA testing before production
+**Purpose:** Pre-production testing environment
 
 **Features:**
-- Loads config from staging Studio
-- Caching enabled
-- Standard logging
-- Staging backend API
-- Mimics production behavior
+- Production-like behavior
+- Limited debugging features
+- Used for QA and integration testing
 
 **When to use:**
 - QA testing
@@ -69,10 +63,8 @@ flutter run --dart-define=ENV=staging
 **Configuration:**
 ```dart
 Flavor.staging(
-  studioUrl: 'https://staging.studio.digia.io/api',
-  cachingEnabled: true,
-  cacheExpiry: Duration(minutes: 30),
-  logLevel: LogLevel.info,
+  branchName: AppConfig.branch,
+  environment: AppConfig.environment,
 );
 ```
 
@@ -80,20 +72,17 @@ Flavor.staging(
 
 ### Versioned Flavor
 
-**Purpose:** Beta testing with version pinning
+**Purpose:** Version-controlled releases
 
 **Features:**
-- Loads specific version from Studio
-- Falls back to local assets if network fails
-- Version-pinned config
-- Production-like caching
-- Useful for A/B testing
+- Specific version pinning
+- Reproducible builds
+- Enterprise deployments
 
 **When to use:**
 - Beta testing specific versions
 - Rollback testing
 - Version comparison
-- Gradual rollouts
 
 **Usage:**
 ```bash
@@ -103,10 +92,8 @@ flutter run --dart-define=ENV=staging --dart-define=VERSION=1.2.3
 **Configuration:**
 ```dart
 Flavor.versioned(
+  environment: AppConfig.environment,
   version: '1.2.3',
-  studioUrl: 'https://studio.digia.io/api',
-  cachingEnabled: true,
-  fallbackToLocal: true,
 );
 ```
 
@@ -114,14 +101,12 @@ Flavor.versioned(
 
 ### Release Flavor
 
-**Purpose:** Production apps
+**Purpose:** Production deployment
 
 **Features:**
-- Loads from production Studio
-- Aggressive caching
-- Minimal logging
-- Production backend API
-- OTA updates enabled
+- Optimized for performance
+- Minimal debugging overhead
+- Secure configuration
 
 **When to use:**
 - Production builds
@@ -135,135 +120,104 @@ flutter build apk --dart-define=ENV=prod
 **Configuration:**
 ```dart
 Flavor.release(
-  studioUrl: 'https://studio.digia.io/api',
-  cachingEnabled: true,
-  cacheExpiry: Duration(hours: 24),
-  logLevel: LogLevel.error,
-  enableOTAUpdates: true,
+  branchName: AppConfig.branch,
+  environment: AppConfig.environment,
 );
 ```
 
 ---
 
-## Init Strategies
+## Initialization Methods
 
-### NetworkFirst Strategy
+### DigiaUIAppBuilder (Recommended)
 
 **How it works:**
-1. Fetch latest config from Studio
-2. Update local cache
-3. Use fetched config
-4. If network fails, fallback to cache
+1. Automatic SDK initialization
+2. Built-in loading and error states
+3. Builder pattern for custom UI
+4. Handles all lifecycle management
 
 **When to use:**
-- You need latest updates immediately
-- Network is generally reliable
-- OTA updates are critical
+- New Digia-first apps
+- Simple initialization
+- Built-in loading/error handling
 
 **Pros:**
-- Always up-to-date
-- Users see latest changes immediately
+- Automatic initialization
+- Built-in loading states
+- Simple to use
+- Handles errors gracefully
 
 **Cons:**
-- Slower startup if network is slow
-- Requires internet connection for first launch
+- Less control over initialization
+- Fixed loading/error UI
 
 **Configuration:**
 ```dart
-initStrategy: InitStrategy.networkFirst(
-  timeout: Duration(seconds: 10),
-  fallbackToCache: true,
+DigiaUIAppBuilder(
+  options: DigiaUIOptions(
+    accessKey: AppConfig.getAccessKey(),
+    flavor: DigiaConfig.getFlavor(),
+  ),
+  analytics: analytics,
+  builder: (context, status) {
+    if (status.isLoading) {
+      return const MaterialApp(home: Scaffold(body: Center(child: CircularProgressIndicator())));
+    }
+    if (status.hasError) {
+      return MaterialApp(home: Scaffold(body: Center(child: Text('Error: ${status.error}'))));
+    }
+    // SDK ready - register widgets and return app
+    registerDeliveryTypeStatusCustomWidgets();
+    return MaterialApp(home: HomePage());
+  },
 );
 ```
 
-**Example:**
+---
+
+### Manual + DigiaUIApp
+
+**How it works:**
+1. Manual SDK initialization with DigiaUI.initialize()
+2. Custom loading/error handling
+3. Full control over initialization process
+4. Wrap with DigiaUIApp for context
+
+**When to use:**
+- Existing Flutter apps
+- Hybrid native + Digia integration
+- Custom loading/error UI
+- Gradual migration
+
+**Pros:**
+- Full control over initialization
+- Custom loading/error UI
+- Lazy loading possible
+- Hybrid app support
+
+**Cons:**
+- More complex setup
+- Manual error handling
+- More boilerplate code
+
+**Configuration:**
 ```dart
-DigiaUIApp(
-  flavor: Flavor.release(),
-  initStrategy: InitStrategy.networkFirst(
-    timeout: Duration(seconds: 10),
+// Initialize manually
+final digiaUI = await DigiaUI.initialize(
+  DigiaUIOptions(
+    accessKey: AppConfig.getAccessKey(),
+    flavor: DigiaConfig.getFlavor(),
   ),
 );
-```
 
----
-
-### CacheFirst Strategy (Recommended)
-
-**How it works:**
-1. Load config from cache (if available)
-2. Show UI immediately
-3. Fetch latest config in background
-4. Update UI when new config arrives
-
-**When to use:**
-- Fast startup is priority
-- Users don't need instant updates
-- Best for most production apps
-
-**Pros:**
-- Instant startup
-- Good offline experience
-- Background updates
-
-**Cons:**
-- Users may see old UI briefly
-- Updates delayed slightly
-
-**Configuration:**
-```dart
-initStrategy: InitStrategy.cacheFirst(
-  backgroundRefresh: true,
-  refreshInterval: Duration(hours: 6),
-);
-```
-
-**Example:**
-```dart
+// Wrap with DigiaUIApp
 DigiaUIApp(
-  flavor: Flavor.release(),
-  initStrategy: InitStrategy.cacheFirst(
-    backgroundRefresh: true,
-  ),
-);
-```
-
----
-
-### LocalFirst Strategy
-
-**How it works:**
-1. Always use bundled local assets
-2. Never fetch from network
-3. No OTA updates
-
-**When to use:**
-- Offline-first apps
-- No OTA updates needed
-- Fully static UI
-- Maximum performance
-
-**Pros:**
-- Fastest startup
-- Works completely offline
-- No network dependency
-
-**Cons:**
-- No OTA updates
-- Requires app update for UI changes
-
-**Configuration:**
-```dart
-initStrategy: InitStrategy.localFirst(
-  assetsPath: 'assets/digia/',
-);
-```
-
-**Example:**
-```dart
-DigiaUIApp(
-  flavor: Flavor.debug(),
-  initStrategy: InitStrategy.localFirst(),
+  digiaUI: digiaUI,
+  builder: (context) {
+    registerDeliveryTypeStatusCustomWidgets();
+    return MaterialApp(home: HomePage());
+  },
 );
 ```
 
@@ -280,7 +234,7 @@ flutter run --dart-define=ENV=dev --dart-define=INTEGRATION_MODE=hybrid
 **Uses:**
 - Debug flavor
 - Local API: `http://localhost:8000/api`
-- NetworkFirst or LocalFirst strategy
+- DigiaUIAppBuilder or Manual initialization
 - Verbose logging
 
 ---
@@ -294,7 +248,7 @@ flutter run --dart-define=ENV=staging --dart-define=INTEGRATION_MODE=hybrid
 **Uses:**
 - Staging flavor
 - Staging API: `https://api-staging.producthub.com`
-- CacheFirst strategy (recommended)
+- DigiaUIAppBuilder (recommended)
 - Info-level logging
 
 ---
@@ -308,7 +262,7 @@ flutter build apk --dart-define=ENV=prod --dart-define=INTEGRATION_MODE=fullDigi
 **Uses:**
 - Release flavor
 - Production API: `https://api.producthub.com`
-- CacheFirst strategy (recommended)
+- DigiaUIAppBuilder (recommended)
 - Error-only logging
 
 ---
@@ -317,126 +271,144 @@ flutter build apk --dart-define=ENV=prod --dart-define=INTEGRATION_MODE=fullDigi
 
 ### For Daily Development
 ```bash
-ENV=dev + Debug Flavor + NetworkFirst Strategy
+ENV=dev + Debug Flavor + DigiaUIAppBuilder
 ```
 
-Fast iteration, hot reload, latest Studio changes.
+Fast iteration, automatic initialization, development tools.
 
 ---
 
 ### For QA Testing
 ```bash
-ENV=staging + Staging Flavor + CacheFirst Strategy
+ENV=staging + Staging Flavor + DigiaUIAppBuilder
 ```
 
-Production-like behavior, stable testing.
+Production-like behavior, built-in error handling.
 
 ---
 
 ### For Beta Testing
 ```bash
-ENV=staging + Versioned Flavor + CacheFirst Strategy
+ENV=staging + Versioned Flavor + DigiaUIAppBuilder
 ```
 
-Version-pinned releases, easy rollbacks.
+Version-pinned releases, reproducible builds.
 
 ---
 
 ### For Production
 ```bash
-ENV=prod + Release Flavor + CacheFirst Strategy
+ENV=prod + Release Flavor + DigiaUIAppBuilder
 ```
 
-Fast startup, background updates, stable.
+Optimized performance, automatic initialization.
+
+---
+
+### For Hybrid Apps
+```bash
+ENV=dev + Debug Flavor + Manual + DigiaUIApp
+```
+
+Full control, custom loading UI, gradual migration.
 
 ---
 
 ## Advanced Configuration
 
-### Custom Init Strategy Selection
+### Custom Flavor Selection
 
 ```dart
 // In digia_config.dart
-InitStrategy _getInitStrategy() {
-  // Use NetworkFirst for debug (always fresh)
-  if (AppConfig.environment == 'dev') {
-    return InitStrategy.networkFirst(timeout: Duration(seconds: 10));
+Flavor getFlavor() {
+  switch (AppConfig.environment) {
+    case 'dev':
+      return Flavor.debug(
+        branchName: AppConfig.branch,
+        environment: AppConfig.environment,
+      );
+    
+    case 'staging':
+      return Flavor.staging(
+        branchName: AppConfig.branch,
+        environment: AppConfig.environment,
+      );
+    
+    case 'prod':
+      return Flavor.release(
+        branchName: AppConfig.branch,
+        environment: AppConfig.environment,
+      );
+    
+    default:
+      return Flavor.debug(
+        branchName: 'main',
+        environment: 'dev',
+      );
   }
-  
-  // Use CacheFirst for staging and production (fast startup)
-  return InitStrategy.cacheFirst(
-    backgroundRefresh: true,
-    refreshInterval: Duration(hours: 6),
-  );
 }
 ```
 
 ---
 
-### Environment-Specific Flavors
+### Custom DigiaUIOptions
 
 ```dart
-Flavor _getFlavor() {
-  switch (AppConfig.environment) {
-    case 'dev':
-      return _getDebugFlavor();
-    
-    case 'staging':
-      return _getStagingFlavor();
-    
-    case 'prod':
-      return _getReleaseFlavor();
-    
-    default:
-      return _getDebugFlavor();
-  }
-}
+DigiaUIOptions(
+  accessKey: AppConfig.getAccessKey(),
+  flavor: DigiaConfig.getFlavor(),
+  // Optional: Add network configuration
+  // networkConfiguration: NetworkConfiguration(
+  //   timeout: Duration(seconds: 15),
+  //   retryCount: 2,
+  // ),
+);
 ```
 
 ---
 
 ## Testing Different Configurations
 
-### Test NetworkFirst with Debug
+### Test DigiaUIAppBuilder
 
 ```bash
 flutter run --dart-define=ENV=dev
 ```
 
-Expected: App fetches latest from Studio, fast iterations.
+Expected: Automatic initialization, built-in loading states.
 
 ---
 
-### Test CacheFirst with Staging
+### Test Manual Initialization
 
 ```bash
-flutter run --dart-define=ENV=staging
+flutter run --dart-define=ENV=dev
 ```
 
-Expected: App loads from cache instantly, updates in background.
+Expected: Custom loading UI, full initialization control.
 
 ---
 
-### Test LocalFirst (Offline)
+### Test Offline Mode
 
 ```bash
 # Turn off internet, then run:
 flutter run --dart-define=ENV=dev
 ```
 
-Expected: App works completely offline using bundled assets.
+Expected: Graceful error handling, fallback behavior.
 
 ---
 
 ## Quick Reference
 
-| Flavor | Environment | Init Strategy | Use Case |
-|--------|-------------|---------------|----------|
-| Debug | Development | NetworkFirst | Daily dev |
-| Debug | Development | LocalFirst | Offline dev |
-| Staging | Staging | CacheFirst | QA testing |
-| Versioned | Staging | CacheFirst | Beta testing |
-| Release | Production | CacheFirst | Production |
+| Flavor | Environment | Init Method | Use Case |
+|--------|-------------|-------------|----------|
+| Debug | Development | DigiaUIAppBuilder | Daily dev |
+| Debug | Development | Manual + DigiaUIApp | Hybrid dev |
+| Staging | Staging | DigiaUIAppBuilder | QA testing |
+| Versioned | Staging | DigiaUIAppBuilder | Beta testing |
+| Release | Production | DigiaUIAppBuilder | Production |
 
 ---
 

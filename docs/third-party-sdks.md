@@ -284,7 +284,7 @@ class DeliveryTypeStatus extends VirtualLeafStatelessWidget<DeliveryTypeWidgetPr
 ```dart
 void registerDeliveryTypeStatusCustomWidgets() {
   DUIFactory().registerWidget<DeliveryTypeWidgetProps>(
-    'custom/deliverytype-1BsfGx',
+    'custom/deliverytype-1BsfGx', //slug
     DeliveryTypeWidgetProps.fromJson,
     (props, childGroups) => DeliveryTypeStatus(
       props: props, commonProps: null, parent: null, refName: 'custom_deliveryType',
@@ -295,9 +295,41 @@ void registerDeliveryTypeStatusCustomWidgets() {
 
 **4. Call Registration in App Init:**
 ```dart
+// WRONG - Don't call before Digia UI is initialized
 void main() async {
-  registerDeliveryTypeStatusCustomWidgets();
+  registerDeliveryTypeStatusCustomWidgets(); // ❌ DUIFactory not ready yet
   runApp(MyApp());
+}
+
+// CORRECT - Method 1: DigiaUIAppBuilder (Automatic Init)
+void main() async {
+  runApp(DigiaUIAppBuilder(
+    options: DigiaUIOptions(...),
+    builder: (context, status) {
+      if (status.isLoading) return LoadingWidget();
+      
+      // ✅ Register after Digia UI is ready
+      registerDeliveryTypeStatusCustomWidgets();
+      
+      return MyApp();
+    },
+  ));
+}
+
+// CORRECT - Method 2: DigiaUIApp (Manual Init)
+void main() async {
+  // Initialize Digia UI manually
+  final digiaUI = await DigiaConfig.initialize();
+  
+  runApp(DigiaUIApp(
+    digiaUI: digiaUI,
+    builder: (context) {
+      // ✅ Register after Digia UI is ready
+      registerDeliveryTypeStatusCustomWidgets();
+      
+      return MyApp();
+    },
+  ));
 }
 ```
 
@@ -333,7 +365,7 @@ try {
   await payment.startPayment(...);
 } catch (e) {
   analytics.logEvent('payment_error', {'error': e.toString()});
-  DUIAppState().setValue('paymentError', 'Payment failed');
+  DUIAppState().update('paymentError', 'Payment failed');
 }
 ```
 
