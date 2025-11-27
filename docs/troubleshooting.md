@@ -166,7 +166,7 @@ flutter run --verbose
 3. **Check DUIAppState:**
 
 ```dart
-print(DUIAppState.of(context).getAllState());
+print(DUIAppState().getAllState());
 ```
 
 ---
@@ -182,11 +182,11 @@ Native code updates state, but Digia pages don't reflect changes.
 
 **Solution:**
 
-1. **Use DUIAppState.setState():**
+1. **Use DUIAppState.update():**
 
 ```dart
 // ✅ Correct
-DUIAppState.of(context).setState('cartItemCount', 5);
+DUIAppState().update('cartItemCount', 5);
 
 // ❌ Wrong
 someOtherStateManager.set('cartItemCount', 5);
@@ -207,7 +207,7 @@ someOtherStateManager.set('cartItemCount', 5);
 
 ```dart
 // Native code
-DUIAppState.setState('cartItemCount', 5);
+DUIAppState().update('cartItemCount', 5);
 
 // Studio
 {{state.cartItemCount}}  // Must match key exactly
@@ -232,7 +232,7 @@ void initState() {
   super.initState();
   
   // Listen to state changes
-  DUIAppState.of(context).addListener('cartItemCount', (value) {
+  DUIAppState().addListener('cartItemCount', (value) {
     setState(() {
       _cartCount = value ?? 0;
     });
@@ -530,7 +530,7 @@ await Firebase.initializeApp(); // Must be before runApp()
 3. **Check for null safety issues:**
 
 ```dart
-final user = DUIAppState.of(context).getState('user');
+final user = DUIAppState().getValue('user');
 print(user?['name']); // Use null-aware operators
 ```
 
@@ -552,7 +552,7 @@ Press `Shift + R` in terminal or click hot restart button.
 2. **For state issues, clear state:**
 
 ```dart
-DUIAppState.of(context).clearAllState();
+DUIAppState().clearAllState();
 ```
 
 ---
@@ -601,7 +601,7 @@ App memory usage keeps increasing.
 ```dart
 @override
 void dispose() {
-  DUIAppState.of(context).removeListener('cartItemCount');
+  DUIAppState().removeListener('cartItemCount');
   _controller.dispose();
   super.dispose();
 }
@@ -634,8 +634,8 @@ Flavor.debug(
 ### Print State for Debugging
 
 ```dart
-print('All state: ${DUIAppState.of(context).getAllState()}');
-print('User: ${DUIAppState.of(context).getState('user')}');
+print('All state: ${DUIAppState().getAllState()}');
+print('User: ${DUIAppState().getValue('user')}');
 ```
 
 ---

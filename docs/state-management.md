@@ -26,23 +26,23 @@ ProductHub demonstrates 4 state management patterns:
 
 ```dart
 // From native code
-DUIAppState.of(context).setState('user', {
+DUIAppState().update('user', {
   'id': 'user_123',
   'name': 'John Doe',
   'email': 'john@example.com',
 });
 
-DUIAppState.of(context).setState('cartItemCount', 5);
-DUIAppState.of(context).setState('isLoggedIn', true);
+DUIAppState().update('cartItemCount', 5);
+DUIAppState().update('isLoggedIn', true);
 ```
 
 ### Getting Global State
 
 ```dart
 // From native code
-final user = DUIAppState.of(context).getState('user');
-final cartCount = DUIAppState.of(context).getState('cartItemCount') ?? 0;
-final isLoggedIn = DUIAppState.of(context).getState('isLoggedIn') ?? false;
+final user = DUIAppState().getValue('user');
+final cartCount = DUIAppState().getValue('cartItemCount') ?? 0;
+final isLoggedIn = DUIAppState().getValue('isLoggedIn') ?? false;
 
 print('User: ${user['name']}, Cart: $cartCount');
 ```
@@ -50,17 +50,17 @@ print('User: ${user['name']}, Cart: $cartCount');
 ### Listening to State Changes
 
 ```dart
-DUIAppState.of(context).addListener('user', (value) {
-  print('User changed: $value');
-  // Update native UI
-});
+// Note: Listener API may vary by Digia UI version
+// Check Digia UI documentation for current listener patterns
 
-DUIAppState.of(context).addListener('cartItemCount', (value) {
-  // Update cart badge
-  setState(() {
-    _cartBadgeCount = value;
-  });
-});
+// Example pattern (may not be accurate):
+// DUIAppState().addListener('user', (value) {
+//   print('User changed: $value');
+//   // Update native UI
+// });
+
+// For reactive updates, consider using StreamBuilder or ValueNotifier
+// with periodic state checks
 ```
 
 ---
@@ -86,7 +86,11 @@ Pages in Digia Studio have their own state defined in the Studio UI:
 
 ```dart
 // Get page state from Digia page
-final pageState = DUIAppState.of(context).getPageState('catalog_page');
+// Note: API may vary - check Digia UI documentation
+final pageState = DUIAppState().getValue('page.catalog_page');
+// or
+final pageState = DUIAppState().getValue('catalog_page_state');
+
 final products = pageState?['products'] ?? [];
 final isLoading = pageState?['loading'] ?? false;
 ```
@@ -101,17 +105,28 @@ Page state is typically updated by:
 **Example:** Product added to cart triggers state update:
 
 ```dart
-// In message bus handler
-messageBus.on('add_to_cart', (params) async {
-  final productId = params['productId'];
-  
-  // Update global cart count
-  final currentCount = DUIAppState.of(context).getState('cartItemCount') ?? 0;
-  DUIAppState.of(context).setState('cartItemCount', currentCount + 1);
-  
-  // Trigger page refresh
-  DUIAppState.of(context).refreshPage('catalog_page');
-});
+// In a widget with DigiaMessageHandlerMixin
+class _CartHandlerState extends State<CartHandler> with DigiaMessageHandlerMixin {
+  @override
+  void initState() {
+    super.initState();
+    
+    // Register message handler for add_to_cart events from Digia components
+    addMessageHandler('add_to_cart', (message) async {
+      final productId = message['productId'];
+      
+      // Update global cart count
+      final currentCount = DUIAppState().getValue('cartItemCount') ?? 0;
+      DUIAppState().setValue('cartItemCount', currentCount + 1);
+      
+      // Call API to add to cart
+      await apiService.addToCart(productId: productId, quantity: 1);
+      
+      // Log analytics
+      analytics.logEvent(name: 'add_to_cart', parameters: {'product_id': productId});
+    });
+  }
+}
 ```
 
 ---
@@ -146,22 +161,16 @@ Components in Digia pages have local state (like Flutter's StatefulWidget):
 When embedding Digia components in native screens:
 
 ```dart
-// Create component with initial state
+// Create component with parameters
 final productCard = DUIFactory().createComponent(
   'product_card',
-  parameters: {
+  {
     'productId': 'prod_123',
-  },
-  initialState: {
-    'isFavorite': false,
-    'quantity': 1,
   },
 );
 
-// Listen to component state changes
-productCard.addStateListener((state) {
-  print('Component state: $state');
-});
+// Note: initialState cannot be set during component creation
+// State should be managed through DUIAppState or message handlers
 ```
 
 ---
@@ -186,8 +195,8 @@ Future<void> signIn(String email, String password) async {
   final user = await _authAdapter.signIn(email, password);
   
   // Sync to DUIAppState
-  DUIAppState.of(context).setState('user', user);
-  DUIAppState.of(context).setState('isLoggedIn', true);
+  DUIAppState().setValue('user', user);
+  DUIAppState().setValue('isLoggedIn', true);
   
   _analytics.setUserId(userId: user['id']);
 }
@@ -214,8 +223,8 @@ Future<void> signOut() async {
   await _authAdapter.signOut();
   
   // Clear from DUIAppState
-  DUIAppState.of(context).setState('user', null);
-  DUIAppState.of(context).setState('isLoggedIn', false);
+  DUIAppState().setValue('user', null);
+  DUIAppState().setValue('isLoggedIn', false);
 }
 ```
 
@@ -225,41 +234,55 @@ Future<void> signOut() async {
 
 **1. Add to cart from Digia page:**
 
-Message bus handler updates global state:
+Message handler in native code receives events from Digia components:
 
 ```dart
-// In message_bus_adapter.dart
-messageBus.on('add_to_cart', (params) async {
-  final productId = params['productId'];
-  
-  // Call API
-  await apiService.addToCart(productId: productId, quantity: 1);
-  
-  // Update DUIAppState (accessible by native + Digia)
-  final currentCount = DUIAppState.of(context).getState('cartItemCount') ?? 0;
-  DUIAppState.of(context).setState('cartItemCount', currentCount + 1);
-  
-  // Log analytics
-  analytics.logEvent(name: 'add_to_cart', parameters: {'product_id': productId});
-});
+// In a widget with DigiaMessageHandlerMixin
+class _CartManagerState extends State<CartManager> with DigiaMessageHandlerMixin {
+  @override
+  void initState() {
+    super.initState();
+    
+    addMessageHandler('add_to_cart', (message) async {
+      final productId = message['productId'];
+      
+      // Call API
+      await apiService.addToCart(productId: productId, quantity: 1);
+      
+      // Update DUIAppState (accessible by native + Digia)
+      final currentCount = DUIAppState().getValue('cartItemCount') ?? 0;
+      DUIAppState().setValue('cartItemCount', currentCount + 1);
+      
+      // Log analytics
+      analytics.logEvent(name: 'add_to_cart', parameters: {'product_id': productId});
+    });
+  }
+}
 ```
 
 **2. Native cart badge updates automatically:**
 
 ```dart
 // In native AppBar
-class _HomeState extends State<Home> {
+class _HomeState extends State<Home> with DigiaMessageHandlerMixin {
   int _cartCount = 0;
   
   @override
   void initState() {
     super.initState();
     
-    // Listen to cart count changes
-    DUIAppState.of(context).addListener('cartItemCount', (value) {
-      setState(() {
-        _cartCount = value ?? 0;
-      });
+    // Initialize cart count
+    _updateCartCount();
+    
+    // Listen for cart updates via message handlers
+    addMessageHandler('cart_updated', (message) {
+      _updateCartCount();
+    });
+  }
+  
+  void _updateCartCount() {
+    setState(() {
+      _cartCount = DUIAppState().getValue('cartItemCount') ?? 0;
     });
   }
   
@@ -271,7 +294,10 @@ class _HomeState extends State<Home> {
           label: Text('$_cartCount'),
           child: IconButton(
             icon: Icon(Icons.shopping_cart),
-            onPressed: () => Navigator.pushNamed(context, '/cart'),
+            onPressed: () {
+              _updateCartCount(); // Refresh before navigation
+              Navigator.pushNamed(context, '/cart');
+            },
           ),
         ),
       ],
@@ -299,34 +325,34 @@ class _HomeState extends State<Home> {
 
 ```dart
 // When user logs in
-DUIAppState.of(context).setState('user', userData);
-DUIAppState.of(context).setState('isLoggedIn', true);
-DUIAppState.of(context).setState('authToken', token);
+DUIAppState().setValue('user', userData);
+DUIAppState().setValue('isLoggedIn', true);
+DUIAppState().setValue('authToken', token);
 
 // When user logs out
-DUIAppState.of(context).setState('user', null);
-DUIAppState.of(context).setState('isLoggedIn', false);
-DUIAppState.of(context).setState('authToken', null);
+DUIAppState().setValue('user', null);
+DUIAppState().setValue('isLoggedIn', false);
+DUIAppState().setValue('authToken', null);
 ```
 
 ### Pattern 2: API Data
 
 ```dart
 // Before API call
-DUIAppState.of(context).setState('products', []);
-DUIAppState.of(context).setState('productsLoading', true);
+DUIAppState().setValue('products', []);
+DUIAppState().setValue('productsLoading', true);
 
 // After API call
 final products = await apiService.getProducts();
-DUIAppState.of(context).setState('products', products);
-DUIAppState.of(context).setState('productsLoading', false);
+DUIAppState().setValue('products', products);
+DUIAppState().setValue('productsLoading', false);
 ```
 
 ### Pattern 3: Feature Flags
 
 ```dart
 // Set feature flags
-DUIAppState.of(context).setState('features', {
+DUIAppState().setValue('features', {
   'newCheckout': true,
   'socialLogin': false,
   'darkMode': true,
@@ -340,13 +366,13 @@ DUIAppState.of(context).setState('features', {
 
 ```dart
 // Theme
-DUIAppState.of(context).setState('theme', 'dark');
+DUIAppState().setValue('theme', 'dark');
 
 // Language
-DUIAppState.of(context).setState('language', 'en');
+DUIAppState().setValue('language', 'en');
 
 // Notifications
-DUIAppState.of(context).setState('notificationsEnabled', true);
+DUIAppState().setValue('notificationsEnabled', true);
 ```
 
 ---
@@ -356,18 +382,26 @@ DUIAppState.of(context).setState('notificationsEnabled', true);
 ### Saving State to Storage
 
 ```dart
-// When state changes, save to storage
-DUIAppState.of(context).addListener('user', (user) async {
-  if (user != null) {
-    await storageService.saveUser(user);
-  } else {
-    await storageService.clearUser();
+// Use message handlers to react to state changes
+class _StatePersistenceManager extends State<StatePersistenceManager> with DigiaMessageHandlerMixin {
+  @override
+  void initState() {
+    super.initState();
+    
+    // Listen for user state changes via message bus
+    addMessageHandler('user_state_changed', (message) async {
+      final user = DUIAppState().getValue('user');
+      if (user != null) {
+        await storageService.saveUser(user);
+      } else {
+        await storageService.clearUser();
+      }
+    });
   }
-});
+}
 
-DUIAppState.of(context).addListener('theme', (theme) async {
-  await storageService.setThemeMode(theme);
-});
+// Alternative: Poll for changes periodically
+// or use DUIAppState changes via message handlers from Digia components
 ```
 
 ### Restoring State on App Launch
@@ -379,18 +413,24 @@ void main() async {
   
   final storage = StorageService();
   
-  runApp(MyApp(
-    onDigiaReady: (context) {
+  runApp(DigiaUIAppBuilder(
+    config: DigiaConfig.initialize(),
+    builder: (context, digiaUI) {
+      // Register message handlers after Digia UI is ready
+      // (This would be in a stateful widget that handles messages)
+      
       // Restore user
       final user = storage.getUser();
       if (user != null) {
-        DUIAppState.of(context).setState('user', user);
-        DUIAppState.of(context).setState('isLoggedIn', true);
+        DUIAppState().setValue('user', user);
+        DUIAppState().setValue('isLoggedIn', true);
       }
       
       // Restore theme
       final theme = storage.getThemeMode();
-      DUIAppState.of(context).setState('theme', theme);
+      DUIAppState().setValue('theme', theme);
+      
+      return MyApp();
     },
   ));
 }
@@ -419,7 +459,7 @@ When `cartItemCount` changes, text updates automatically.
 
 ### Native Reactive Updates
 
-Use `ValueNotifier` or `StreamBuilder` for native screens:
+Use `ValueNotifier` or `StreamBuilder` for native screens that react to DUIAppState changes:
 
 ```dart
 class CartBadge extends StatefulWidget {
@@ -429,19 +469,21 @@ class CartBadge extends StatefulWidget {
 
 class _CartBadgeState extends State<CartBadge> {
   late final ValueNotifier<int> _cartCount;
-  
+  late StreamSubscription _subscription;
+
   @override
   void initState() {
     super.initState();
-    
-    final initialCount = DUIAppState.of(context).getState('cartItemCount') ?? 0;
+
+    final initialCount = DUIAppState().getValue('cartItemCount') ?? 0;
     _cartCount = ValueNotifier(initialCount);
-    
-    DUIAppState.of(context).addListener('cartItemCount', (value) {
+
+    // Listen for DUIAppState changes
+    _subscription = DUIAppState().listen('cartItemCount', (value) {
       _cartCount.value = value ?? 0;
     });
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<int>(
@@ -449,18 +491,44 @@ class _CartBadgeState extends State<CartBadge> {
       builder: (context, count, _) {
         return Badge(
           label: Text('$count'),
-          child: Icon(Icons.shopping_cart),
+          child: IconButton(
+            icon: Icon(Icons.shopping_cart),
+            onPressed: () => Navigator.pushNamed(context, '/cart'),
+          ),
         );
       },
     );
   }
-  
+
   @override
   void dispose() {
+    _subscription.cancel();
     _cartCount.dispose();
     super.dispose();
   }
 }
+```
+
+### StreamBuilder Pattern
+
+For simpler reactive UI without manual state management:
+
+```dart
+StreamBuilder<dynamic>(
+  stream: DUIAppState().getStream('cartItemCount'),
+  initialData: 0,
+  builder: (context, snapshot) {
+    final count = snapshot.data as int? ?? 0;
+    return Badge(
+      label: Text('$count'),
+      isLabelVisible: count > 0,
+      child: IconButton(
+        icon: Icon(Icons.shopping_cart),
+        onPressed: () => Navigator.pushNamed(context, '/cart'),
+      ),
+    );
+  },
+)
 ```
 
 ---
@@ -470,23 +538,20 @@ class _CartBadgeState extends State<CartBadge> {
 ### Print Current State
 
 ```dart
-// Print all global state
-print(DUIAppState.of(context).getAllState());
-
-// Print specific state
-print('User: ${DUIAppState.of(context).getState('user')}');
-print('Cart: ${DUIAppState.of(context).getState('cartItemCount')}');
+// Print specific state values
+print('User: ${DUIAppState().getValue('user')}');
+print('Cart: ${DUIAppState().getValue('cartItemCount')}');
+print('Theme: ${DUIAppState().getValue('theme')}');
 ```
 
 ### State Logging
 
 ```dart
-// In app initialization
-DUIAppState.of(context).enableLogging();
+// Note: Logging API may vary by Digia UI version
+// DUIAppState().enableLogging();
 
-// Now all state changes are logged:
-// [DUIAppState] setState: user = {id: user_123, name: John}
-// [DUIAppState] setState: cartItemCount = 5
+// Alternative: Manual logging
+print('Current state - User: ${DUIAppState().getValue('user')}, Cart: ${DUIAppState().getValue('cartItemCount')}');
 ```
 
 ---
@@ -502,13 +567,13 @@ DUIAppState.of(context).enableLogging();
 
 ✅ **Good:**
 ```dart
-DUIAppState.setState('userId', 'user_123');
-DUIAppState.setState('userName', 'John Doe');
+DUIAppState().setValue('userId', 'user_123');
+DUIAppState().setValue('userName', 'John Doe');
 ```
 
 ❌ **Bad:**
 ```dart
-DUIAppState.setState('user.profile.details.name', 'John Doe');
+DUIAppState().setValue('user.profile.details.name', 'John Doe');
 ```
 
 ### 3. Sync State Immediately
@@ -516,7 +581,7 @@ DUIAppState.setState('user.profile.details.name', 'John Doe');
 ✅ **Good:**
 ```dart
 await signIn(email, password);
-DUIAppState.setState('user', user); // Right after login
+DUIAppState().setValue('user', user); // Right after login
 ```
 
 ❌ **Bad:**
@@ -530,9 +595,9 @@ await signIn(email, password);
 ✅ **Good:**
 ```dart
 await signOut();
-DUIAppState.setState('user', null);
-DUIAppState.setState('authToken', null);
-DUIAppState.setState('cartItemCount', 0);
+DUIAppState().setValue('user', null);
+DUIAppState().setValue('authToken', null);
+DUIAppState().setValue('cartItemCount', 0);
 ```
 
 ---

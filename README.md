@@ -113,6 +113,15 @@ Register native Flutter widgets for use in Digia Studio. Use only when Digia UI 
 - Performance-critical custom logic
 - Specialized components missing from Digia UI
 
+**Example Use Cases:**
+- Camera integration for product photos
+- GPS-based delivery tracking
+- Biometric authentication
+- Custom payment flows
+- Third-party SDK integrations (maps, analytics, etc.)
+
+**See Also:** [Custom Widgets Guide](docs/custom-widgets-guide.md) for implementation details.
+
 ## 🎨 Example Flows
 
 ### State Bridging Example
@@ -257,6 +266,7 @@ product_hub/
 - [Getting Started Guide](docs/getting-started.md) - Detailed setup instructions
 - [Flavors Guide](docs/flavors-guide.md) - Environment and flavor configuration
 - [State Management](docs/state-management.md) - State patterns and examples
+- [Custom Widgets Guide](docs/custom-widgets-guide.md) - Registering native widgets for Digia Studio
 - [Third-Party SDKs](docs/third-party-sdks.md) - SDK integration guides
 - [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
 

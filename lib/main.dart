@@ -117,7 +117,6 @@ class AutomaticInitExample extends StatelessWidget {
           'storeName': AppConfig.shopifyStoreName,
         });
         registerDeliveryTypeStatusCustomWidgets();
-
         // SDK initialized - can use DUIFactory and DUIAppState
         return MaterialApp(
           title: 'ProductHub - Digia UI Demo',

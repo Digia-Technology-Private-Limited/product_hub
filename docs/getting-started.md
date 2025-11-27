@@ -49,27 +49,10 @@ Place them in the `assets/` directory.
 
 ## Running the App
 
-### Development Mode
-
 ```bash
 fvm flutter run
 ```
 
-### With Custom Environment
-
-```bash
-# Staging environment
-fvm flutter run --dart-define=ENVIRONMENT=staging
-
-# Custom branch
-fvm flutter run --dart-define=BRANCH=feature/new-ui
-```
-
-### Production Build
-
-```bash
-fvm flutter build apk --release
-```
 
 ## Understanding the Demo
 

@@ -4,172 +4,111 @@ Complete guide to integrating third-party SDKs with Digia in ProductHub demo.
 
 ## Overview
 
-ProductHub demonstrates integration patterns using **dummy/placeholder adapters** that simulate real third-party SDK behavior. This approach allows you to:
-
-- Test Digia UI integration without real service dependencies
-- Understand the adapter pattern for future real implementations
-- See how message bus routing works with external services
+ProductHub demonstrates integration patterns using **dummy/placeholder adapters** that simulate real third-party SDK behavior. This approach allows you to test Digia UI integration without real service dependencies.
 
 The demo includes dummy implementations for:
-
-1. **Analytics Service** - Event tracking simulation
-2. **Message Handler** - Push notification simulation
-3. **Payment Service** - Payment gateway simulation
-4. **API Service** - HTTP client simulation
-5. **Storage Service** - Local storage simulation
+- **Analytics Service** - Event tracking simulation
+- **Message Handler** - Push notification simulation
+- **Payment Service** - Payment gateway simulation
+- **API Service** - HTTP client simulation
 
 ---
 
 ## 1. Analytics Service (Dummy Implementation)
 
 ### Setup
-
 **No external dependencies required** - uses dummy adapter for demonstration.
 
 ### Integration with Digia
 
-**Dummy adapter (see `lib/adapters/dummy_analytics_adapter.dart`):**
+**Dummy adapter (see `lib/dummy_adapters/analytics_adapter.dart`):**
 
 ```dart
-class DummyAnalyticsAdapter {
-  Future<void> logEvent({
-    required String name,
-    Map<String, dynamic>? parameters,
-  }) async {
-    // Simulate analytics logging
-    print('📊 Analytics Event: $name');
-    if (parameters != null) {
-      print('   Parameters: $parameters');
-    }
-    
-    // Simulate network delay
-    await Future.delayed(Duration(milliseconds: 100));
+class DummyAnalyticsAdapter extends DUIAnalytics {
+  @override
+  void logEvent(String name, Map<String, dynamic>? parameters) {
+    print('📊 Analytics Event: $name, Params: $parameters');
   }
   
-  Future<void> setUserId({String? userId}) async {
-    print('👤 User ID set: $userId');
-    await Future.delayed(Duration(milliseconds: 50));
-  }
-  
-  Future<void> setUserProperties({
-    required Map<String, String> properties,
-  }) async {
+  @override
+  void setUserProperties(Map<String, dynamic> properties) {
     print('🏷️ User Properties: $properties');
-    await Future.delayed(Duration(milliseconds: 50));
   }
   
-  Future<void> logScreenView({
-    required String screenName,
-  }) async {
-    print('📱 Screen View: $screenName');
-    await Future.delayed(Duration(milliseconds: 50));
+  @override
+  void setUserId(String? userId) {
+    print('👤 User ID: $userId');
   }
+  
+  @override
+  void logScreenView(String screenName) {
+    print('📱 Screen: $screenName');
+  }
+
+  @override
+  void onDataSourceError(String dataSourceType, String source, DataSourceErrorInfo errorInfo) {}
+  @override
+  void onDataSourceSuccess(String dataSourceType, String source, metaData, perfData) {}
+  @override
+  void onEvent(List<AnalyticEvent> events) {}
 }
 ```
 
-### Using with Message Bus
-
-**Wire into message bus (see `lib/adapters/message_bus_adapter.dart`):**
-
-```dart
-class AppMessageBus {
-  final DummyAnalyticsAdapter analytics;
-  
-  AppMessageBus({required this.analytics});
-  
-  void on(String channel, Function(dynamic params) handler) {
-    if (channel == 'log_event') {
-      analytics.logEvent(
-        name: params['event'],
-        parameters: params['params'],
-      );
-    }
-  }
-}
-```
-
-### Track Events from Digia Pages
-
-**In Digia Studio, configure event handler:**
-
-```json
-{
-  "widget": "Button",
-  "props": {
-    "text": "Add to Cart"
-  },
-  "events": {
-    "onPressed": {
-      "action": "messageBus",
-      "channel": "log_event",
-      "params": {
-        "event": "add_to_cart",
-        "params": {
-          "product_id": "{{widget.productId}}",
-          "price": "{{widget.price}}"
-        }
-      }
-    }
-  }
-}
-```
+### Key Points
+- **Always extend DUIAnalytics** for proper Digia UI integration
+- **Required methods**: `logEvent()`, `setUserProperties()`, `setUserId()`, `logScreenView()`
 
 ---
 
 ## 2. Message Handler (Dummy Implementation)
 
 ### Setup
-
 **No external dependencies required** - simulates push notification behavior.
 
 ### Integration
 
-**Dummy adapter (see `lib/adapters/dummy_message_handler_adapter.dart`):**
+**Dummy adapter (see `lib/dummy_adapters/message_handler.dart`):**
 
 ```dart
-class DummyMessageHandlerAdapter {
-  Future<void> initialize() async {
-    print('📨 Message Handler initialized (dummy)');
-    await Future.delayed(Duration(milliseconds: 200));
-  }
+class CustomMessageHandler {
+  final DummyAnalyticsAdapter? _analytics;
+
+  CustomMessageHandler({DummyAnalyticsAdapter? analytics})
+      : _analytics = analytics;
   
-  Future<String?> getToken() async {
-    // Return dummy FCM token
-    return 'dummy_fcm_token_' + DateTime.now().millisecondsSinceEpoch.toString();
+  void send(Message message, BuildContext context) async {
+    switch (message.name) {
+      case 'start_payment':
+        await _handlePayment(message.payload);
+        break;
+      case 'log_event':
+        _handleLogEvent(message.payload);
+        break;
+      case 'share_product':
+        await _handleShare(message.payload);
+        break;
+      case 'open_url':
+        await _handleOpenUrl(message.payload);
+        break;
+    }
   }
-  
-  Stream<Map<String, dynamic>> get onMessage {
-    // Simulate incoming messages
-    return Stream.periodic(Duration(seconds: 30), (count) {
-      return {
-        'title': 'Dummy Notification ${count + 1}',
-        'body': 'This is a simulated push notification',
-        'data': {'page': 'home', 'type': 'promo'}
-      };
+
+  Future<void> _handlePayment(dynamic message) async {
+    final paymentData = message is Map ? Map<String, dynamic>.from(message) : {};
+    _analytics?.logEvent('payment_attempt', {
+      'success': true,
+      'amount': paymentData['amount'],
+      'order_id': 'ORDER12345'
     });
   }
-  
-  Future<void> showLocalNotification(Map<String, dynamic> message) async {
-    print('🔔 Local Notification: ${message['title']}');
-    print('   Body: ${message['body']}');
+
+  void _handleLogEvent(dynamic message) {
+    final data = message is Map ? Map<String, dynamic>.from(message) : {};
+    final eventName = data['name'] ?? 'custom_event';
+    final params = data['params'] as Map<String, dynamic>?;
+    _analytics?.logEvent(eventName, params);
   }
 }
-```
-
-### Deep Linking from Notifications
-
-**Handle notification tap:**
-
-```dart
-// In your app initialization
-messageHandler.onMessage.listen((message) {
-  final data = message['data'];
-  
-  if (data['page'] != null) {
-    // Navigate to Digia page
-    DUIAppState.of(context).navigateToPage(data['page']);
-  }
-});
 ```
 
 ---
@@ -182,7 +121,7 @@ messageHandler.onMessage.listen((message) {
 
 ### Integration
 
-**Dummy adapter (see `lib/adapters/dummy_payment_adapter.dart`):**
+**Dummy adapter (see `lib/dummy_adapters/payment_adapter.dart`):**
 
 ```dart
 class DummyPaymentAdapter {
@@ -193,35 +132,16 @@ class DummyPaymentAdapter {
   }) async {
     print('💳 Starting payment: \$${amount} for order $orderId');
     
-    // Simulate payment processing
     await Future.delayed(Duration(seconds: 2));
-    
-    // Random success/failure for demo
     final success = Random().nextBool();
     
-    if (success) {
-      return {
-        'success': true,
-        'transactionId': 'txn_dummy_${DateTime.now().millisecondsSinceEpoch}',
-        'message': 'Payment successful',
-      };
-    } else {
-      return {
-        'success': false,
-        'message': 'Payment failed (simulated)',
-      };
-    }
-  }
-  
-  Future<Map<String, dynamic>> checkPaymentStatus(String transactionId) async {
-    print('🔍 Checking payment status: $transactionId');
-    
-    await Future.delayed(Duration(milliseconds: 500));
-    
-    return {
-      'status': 'completed',
-      'amount': 99.99,
-      'transactionId': transactionId,
+    return success ? {
+      'success': true,
+      'transactionId': 'txn_dummy_${DateTime.now().millisecondsSinceEpoch}',
+      'message': 'Payment successful',
+    } : {
+      'success': false,
+      'message': 'Payment failed (simulated)',
     };
   }
 }
@@ -229,33 +149,17 @@ class DummyPaymentAdapter {
 
 ### Using with Message Bus
 
-**Handle payment from Digia pages:**
-
 ```dart
-// In message_bus_adapter.dart
 messageBus.on('start_payment', (params) async {
-  final amount = params['amount'];
-  final orderId = params['orderId'];
-  
   final result = await paymentAdapter.startPayment(
-    amount: amount,
+    amount: params['amount'],
     userId: 'user_demo',
-    orderId: orderId,
+    orderId: params['orderId'],
   );
   
   if (result['success']) {
-    analytics.logEvent(
-      name: 'payment_success',
-      parameters: {'amount': amount, 'order_id': orderId},
-    );
-    
-    // Navigate to success page
-    DUIAppState.of(context).navigateToPage('payment_success');
-  } else {
-    analytics.logEvent(
-      name: 'payment_failed',
-      parameters: {'reason': result['message']},
-    );
+    analytics.logEvent('payment_success', {'amount': params['amount']});
+    DUIAppState().navigateToPage('payment_success');
   }
 });
 ```
@@ -265,82 +169,42 @@ messageBus.on('start_payment', (params) async {
 ## 4. API Service (Dummy Implementation)
 
 ### Setup
-
 **Uses Dio for HTTP client** - but connects to dummy endpoints.
 
 ### Integration
 
-**Dummy service (see `lib/services/dummy_api_service.dart`):**
+**Dummy service (see `lib/services/api_service.dart`):**
 
 ```dart
-import 'package:dio/dio.dart';
-
-class DummyApiService {
-  final Dio _dio;
+class ApiService {
+  static late Dio _dio;
+  static late DummyAnalyticsAdapter _analytics;
   
-  DummyApiService() {
+  static void initialize({required DummyAnalyticsAdapter analytics}) {
+    _analytics = analytics;
     _dio = Dio(BaseOptions(
-      baseUrl: 'https://jsonplaceholder.typicode.com', // Dummy API
+      baseUrl: 'https://jsonplaceholder.typicode.com',
       connectTimeout: Duration(seconds: 10),
-      receiveTimeout: Duration(seconds: 10),
     ));
   }
   
   Future<List<Map<String, dynamic>>> getProducts() async {
     try {
       final response = await _dio.get('/posts');
-      
-      // Transform dummy data to product format
       return List<Map<String, dynamic>>.from(response.data.map((post) {
         return {
           'id': post['id'],
           'title': post['title'],
-          'description': post['body'],
-          'price': (post['id'] * 10.0), // Dummy price
+          'price': (post['id'] * 10.0),
           'image': 'https://via.placeholder.com/200x200?text=Product+${post['id']}',
         };
       }));
     } catch (e) {
-      print('API Error: $e');
-      // Return dummy fallback data
-      return [
-        {
-          'id': 1,
-          'title': 'Dummy Product',
-          'description': 'This is a fallback product',
-          'price': 29.99,
-          'image': 'https://via.placeholder.com/200x200?text=Dummy',
-        }
-      ];
+      _analytics.logEvent('api_error', {'error': e.toString()});
+      return []; // Return empty list on error
     }
   }
-  
-  Future<Map<String, dynamic>> getUserProfile() async {
-    final response = await _dio.get('/users/1');
-    return response.data;
-  }
 }
-```
-
-### Using with Digia
-
-**Call from message bus:**
-
-```dart
-messageBus.on('fetch_products', (params) async {
-  DUIAppState.of(context).setState('productsLoading', true);
-  
-  try {
-    final products = await apiService.getProducts();
-    
-    // Update DUIAppState
-    DUIAppState.of(context).setState('products', products);
-    DUIAppState.of(context).setState('productsLoading', false);
-  } catch (e) {
-    DUIAppState.of(context).setState('productsError', e.toString());
-    DUIAppState.of(context).setState('productsLoading', false);
-  }
-});
 ```
 
 ---
@@ -348,27 +212,23 @@ messageBus.on('fetch_products', (params) async {
 ## 5. Storage Service (Dummy Implementation)
 
 ### Setup
-
 **Uses shared_preferences** - but with dummy data simulation.
 
 ### Integration
 
-**Dummy service (see `lib/services/dummy_storage_service.dart`):**
+**Dummy service (see `lib/services/storage_service.dart`):**
 
 ```dart
-import 'package:shared_preferences/shared_preferences.dart';
-
-class DummyStorageService {
+class StorageService {
   final SharedPreferences _prefs;
   
-  static Future<DummyStorageService> init() async {
+  static Future<StorageService> init() async {
     final prefs = await SharedPreferences.getInstance();
-    return DummyStorageService._(prefs);
+    return StorageService._(prefs);
   }
   
-  DummyStorageService._(this._prefs);
+  StorageService._(this._prefs);
   
-  // General storage with dummy data
   Future<void> setString(String key, String value) async {
     print('💾 Storing: $key = $value');
     await _prefs.setString(key, value);
@@ -379,74 +239,102 @@ class DummyStorageService {
     print('📖 Retrieved: $key = $value');
     return value;
   }
-  
-  // Simulate user preferences
-  Future<void> setUserPreferences(Map<String, dynamic> prefs) async {
-    final jsonString = jsonEncode(prefs);
-    await setString('user_prefs', jsonString);
-    print('👤 User preferences saved');
-  }
-  
-  Map<String, dynamic> getUserPreferences() {
-    final jsonString = getString('user_prefs');
-    if (jsonString == null) return {};
-    
-    try {
-      return jsonDecode(jsonString);
-    } catch (e) {
-      return {};
-    }
-  }
 }
 ```
 
 ---
 
-## Best Practices
+## Custom Widgets Integration
 
-### 1. Use Adapter Pattern for All External Services
+### Overview
+Custom widgets allow you to extend Digia UI with native Flutter components for native platform features, third-party packages, and complex UI components.
 
-✅ **Good:** Create adapter layer (e.g., `DummyAnalyticsAdapter`)
-❌ **Bad:** Use services directly in Digia pages
+### Widget Registration Pattern
 
-### 2. Route Everything Through Message Bus
-
-✅ **Good:** Digia pages → Message Bus → Adapter → Service
-❌ **Bad:** Digia pages → Direct service calls
-
-### 3. Log All Events (Even in Dummy Mode)
-
+**1. Create Props Class:**
 ```dart
-analytics.logEvent(name: 'payment_initiated');
-analytics.logEvent(name: 'payment_success');
-analytics.logEvent(name: 'payment_failed');
+class DeliveryTypeWidgetProps {
+  final String title;
+  final Color color;
+  DeliveryTypeWidgetProps({required this.title, required this.color});
+  
+  static DeliveryTypeWidgetProps fromJson(Map<String, dynamic> json) {
+    return DeliveryTypeWidgetProps(
+      title: json['title'] as String,
+      color: Color(int.parse(json['color'].replaceFirst('#', '0xff'))),
+    );
+  }
+}
 ```
 
-### 4. Handle Errors Gracefully
+**2. Create Widget Class:**
+```dart
+class DeliveryTypeStatus extends VirtualLeafStatelessWidget<DeliveryTypeWidgetProps> {
+  DeliveryTypeStatus({required super.props, required super.commonProps, 
+    required super.parent, required super.refName});
 
+  @override
+  Widget render(RenderPayload payload) {
+    return DeliveryTypeStatusCustomWidget(title: props.title, color: props.color);
+  }
+}
+```
+
+**3. Register with DUIFactory:**
+```dart
+void registerDeliveryTypeStatusCustomWidgets() {
+  DUIFactory().registerWidget<DeliveryTypeWidgetProps>(
+    'custom/deliverytype-1BsfGx',
+    DeliveryTypeWidgetProps.fromJson,
+    (props, childGroups) => DeliveryTypeStatus(
+      props: props, commonProps: null, parent: null, refName: 'custom_deliveryType',
+    ),
+  );
+}
+```
+
+**4. Call Registration in App Init:**
+```dart
+void main() async {
+  registerDeliveryTypeStatusCustomWidgets();
+  runApp(MyApp());
+}
+```
+
+### When to Use Custom Widgets vs Digia UI
+
+| Scenario | Use Digia UI | Use Custom Widget |
+|----------|--------------|-------------------|
+| Product Card | ✅ | ❌ |
+| Shopping Cart | ✅ | ❌ |
+| Camera Button | ❌ | ✅ |
+| Payment Form | ❌ | ✅ |
+| GPS Location | ❌ | ✅ |
+
+---
+
+## Best Practices
+
+### 1. Always Extend DUIAnalytics for Analytics
+✅ **Good:** Extend DUIAnalytics and override required methods  
+❌ **Bad:** Create standalone analytics class
+
+### 2. Use Adapter Pattern for All External Services
+✅ **Good:** Create adapter layer (e.g., `DummyAnalyticsAdapter`)  
+❌ **Bad:** Use services directly in Digia pages
+
+### 3. Route Everything Through Message Bus
+✅ **Good:** Digia pages → Message Bus → Adapter → Service  
+❌ **Bad:** Digia pages → Direct service calls
+
+### 4. Handle Errors Gracefully
 ```dart
 try {
   await payment.startPayment(...);
 } catch (e) {
-  analytics.logEvent(name: 'payment_error');
-  // Show user-friendly error in Digia UI
-  DUIAppState.of(context).setState('paymentError', 'Payment failed');
+  analytics.logEvent('payment_error', {'error': e.toString()});
+  DUIAppState().setValue('paymentError', 'Payment failed');
 }
-```
-
-### 5. Make Adapters Easily Replaceable
-
-```dart
-// Easy to swap dummy for real implementation
-abstract class AnalyticsAdapter {
-  Future<void> logEvent({required String name, Map<String, dynamic>? parameters});
-}
-
-// Dummy implementation
-class DummyAnalyticsAdapter implements AnalyticsAdapter { ... }
-
-// Real implementation (future)
-// class FirebaseAnalyticsAdapter implements AnalyticsAdapter { ... }
 ```
 
 ---
@@ -466,8 +354,75 @@ Example replacement:
 // Before (dummy)
 final analytics = DummyAnalyticsAdapter();
 
-// After (real)
-final analytics = FirebaseAnalyticsAdapter();
+// After (real Firebase)
+class FirebaseAnalyticsAdapter extends DUIAnalytics {
+  final FirebaseAnalytics _firebase = FirebaseAnalytics.instance;
+  
+  @override
+  void logEvent(String name, Map<String, dynamic>? parameters) {
+    _firebase.logEvent(name: name, parameters: parameters);
+  }
+  
+  // ... implement other required methods
+}
+```
+
+---
+
+## Message Handling with callExternalMethod
+
+### Setup Message Handler
+
+**Use DigiaMessageHandlerMixin for clean message handling:**
+
+```dart
+class _MyAppState extends State<MyApp> with DigiaMessageHandlerMixin {
+  @override
+  void initState() {
+    super.initState();
+    addMessageHandler('start_payment', _handlePayment);
+    addMessageHandler('share_product', _handleShare);
+    addMessageHandler('open_url', _handleOpenUrl);
+    addMessageHandler('log_event', _handleLogEvent);
+  }
+
+  Future<void> _handlePayment(dynamic message) async {
+    print('[Payment] Starting payment: $message');
+    // Integrate with payment gateway
+  }
+
+  Future<void> _handleShare(dynamic message) async {
+    final data = message is Map ? Map<String, dynamic>.from(message) : {};
+    print('[Share] Would share: ${data['text']}');
+  }
+
+  Future<void> _handleOpenUrl(dynamic message) async {
+    final url = message is String ? message : message['url'];
+    print('[URL] Opening: $url');
+  }
+
+  void _handleLogEvent(dynamic message) {
+    final event = message is Map ? Map<String, dynamic>.from(message) : {};
+    print('[Analytics] Event: ${event['name']}');
+  }
+}
+```
+
+### Using callExternalMethod in Digia Studio
+
+**Payment Example:**
+```json
+{
+  "widget": "Button",
+  "props": {"text": "Start Payment"},
+  "events": {
+    "onPressed": {
+      "action": "callExternalMethod",
+      "channel": "start_payment",
+      "data": {"amount": "{{totalPrice}}", "orderId": "{{orderId}}"}
+    }
+  }
+}
 ```
 
 ---
@@ -475,5 +430,6 @@ final analytics = FirebaseAnalyticsAdapter();
 ## Next Steps
 
 - See [Getting Started](getting-started.md) for running the app
-- See [State Management](state-management.md) for state sync patterns
+- See [State Management](state-management.md) for DUIAppState patterns
 - See [Flavors Guide](flavors-guide.md) for environment configuration
+- See [Custom Widgets](../lib/widgets/README.md) for widget development guide
