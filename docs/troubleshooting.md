@@ -17,32 +17,111 @@ Error: DUIAppState is not available. Make sure DigiaUIApp is initialized.
 
 **Solution:**
 
-1. **Ensure DigiaUIAppBuilder is used in main.dart:**
+ProductHub uses two initialization methods. Make sure you're using one correctly:
 
+**Method 1: DigiaUIAppBuilder (Used in main.dart)**
 ```dart
-// In main.dart
-return DigiaUIAppBuilder(
-  options: DigiaUIOptions(
-    accessKey: AppConfig.getAccessKey(),
-    flavor: DigiaConfig.getFlavor(),
-  ),
-  builder: (context, status) {
-    if (status.isLoading) {
-      return LoadingScreen();
-    }
-    
-    if (status.hasError) {
-      return ErrorScreen(error: status.error);
-    }
-    
-    return MaterialApp(home: DUIFactory().createInitialPage());
-  },
-);
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await AppConfig.loadConfig();
+
+  final analytics = DummyAnalyticsAdapter();
+  final messageHandler = CustomMessageHandler(analytics: analytics);
+  ApiService.initialize(analytics: analytics);
+
+  runApp(DigiaUIAppBuilder(
+    options: DigiaUIOptions(
+      accessKey: AppConfig.getAccessKey(),
+      flavor: DigiaConfig.getFlavor(),
+    ),
+    analytics: analytics,
+    builder: (context, status) {
+      if (status.isLoading) {
+        return MaterialApp(
+          home: Scaffold(
+            backgroundColor: Color(0xFF673AB7),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(color: Colors.white),
+                  SizedBox(height: 24),
+                  Text('Loading...', style: TextStyle(color: Colors.white, fontSize: 16)),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+      if (status.hasError) {
+        return MaterialApp(
+          home: Scaffold(body: Center(child: Text('Error: ${status.error}'))),
+        );
+      }
+
+      DUIFactory().setEnvironmentVariables({
+        'accessToken': AppConfig.shopifyAccessToken,
+        'storeName': AppConfig.shopifyStoreName,
+      });
+      registerDeliveryTypeStatusCustomWidgets();
+
+      return MaterialApp(
+        title: 'ProductHub - Digia UI Demo',
+        theme: ThemeData(primarySwatch: Colors.deepPurple),
+        home: MessageHandlerWrapper(
+          messageHandler: messageHandler,
+          child: const HomePage(),
+        ),
+      );
+    },
+  ));
+}
 ```
 
-2. **For demo mode (without real SDK):**
+**Method 2: Manual + DigiaUIApp (Alternative in main.dart)**
+```dart
+class ManualInitExample extends StatefulWidget {
+  @override
+  State<ManualInitExample> createState() => _ManualInitExampleState();
+}
 
-Uncomment the Digia initialization in `digia_config.dart` and provide mock access keys.
+class _ManualInitExampleState extends State<ManualInitExample> {
+  late Future<DigiaUI> _initFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _initFuture = DigiaConfig.initialize();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<DigiaUI>(
+      future: _initFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return MaterialApp(home: Scaffold(body: Center(child: CircularProgressIndicator())));
+        }
+        if (snapshot.hasError) {
+          return MaterialApp(home: Scaffold(body: Center(child: Text('Error: ${snapshot.error}'))));
+        }
+
+        return DigiaUIApp(
+          digiaUI: snapshot.data!,
+          builder: (context) {
+            registerDeliveryTypeStatusCustomWidgets();
+            DUIFactory().setEnvironmentVariables({
+              'accessToken': AppConfig.shopifyAccessToken,
+              'storeName': AppConfig.shopifyStoreName,
+            });
+            return MaterialApp(home: HomePage());
+          },
+        );
+      },
+    );
+  }
+}
+```
 
 ---
 
@@ -53,24 +132,29 @@ Uncomment the Digia initialization in `digia_config.dart` and provide mock acces
 Error: Access key is required for Digia SDK initialization
 ```
 
-**Cause:** No access key provided.
+**Cause:** No access key provided in configuration.
 
 **Solution:**
 
-**Option 1: Set via dart-define (recommended)**
-
+**Option 1: Environment variable (recommended)**
 ```bash
-flutter run --dart-define=DIGIA_ACCESS_KEY_DEBUG=your_debug_key
+flutter run --dart-define=DIGIA_ACCESS_KEY_DEBUG=your_key_here
 ```
 
-**Option 2: Set in code (not recommended for production)**
-
-```dart
-// In app_config.dart
-static String getAccessKey() {
-  return 'your_debug_key'; // Hardcoded (demo only)
+**Option 2: app_config.json file**
+```json
+{
+  "digiaAccessKey": "your_key_here",
+  "shopifyAccessToken": "your_shopify_token",
+  "shopifyStoreName": "your_store_name"
 }
 ```
+
+**Check AppConfig.getAccessKey() implementation:**
+The app tries multiple sources in order:
+1. `DIGIA_ACCESS_KEY_DEBUG` environment variable
+2. `app_config.json` file
+3. Demo fallback key
 
 ---
 
@@ -81,28 +165,30 @@ static String getAccessKey() {
 Error: Network error: Failed to connect to Studio
 ```
 
-**Cause:** Network issue or invalid Studio URL.
+**Cause:** Network issue or invalid access key.
 
 **Solution:**
 
 1. **Check internet connection**
 
-2. **Verify Studio URL in flavor config:**
+2. **Verify access key is valid**
 
+3. **Ensure AppConfig.loadConfig() is called:**
 ```dart
-// In digia_config.dart
-Flavor.debug(
-  studioUrl: 'https://studio.digia.io/api', // Check this URL
+// Must be called before DigiaConfig.initialize()
+await AppConfig.loadConfig();
+```
+
+4. **Check DigiaConfig.initialize() parameters:**
+```dart
+// From digia_config.dart
+return await DigiaUI.initialize(
+  DigiaUIOptions(
+    accessKey: AppConfig.getAccessKey(),
+    flavor: DigiaConfig.getFlavor(),
+  ),
 );
 ```
-
-3. **Use LocalFirst init strategy for offline development:**
-
-```dart
-initStrategy: InitStrategy.localFirst();
-```
-
-4. **Check firewall/proxy settings**
 
 ---
 
@@ -115,27 +201,22 @@ initStrategy: InitStrategy.localFirst();
 Error: Page with ID 'catalog' not found
 ```
 
-**Cause:** Page doesn't exist in Digia Studio or not downloaded.
+**Cause:** Page doesn't exist in Digia Studio or incorrect initialization.
 
 **Solution:**
 
-1. **Check page ID in Studio**
+1. **Check Digia Studio project has the required pages**
 
-2. **Download latest assets:**
+2. **Verify Digia UI initialization completed:**
+Ensure `DigiaUIAppBuilder` or `DigiaUIApp` completed successfully.
 
-```bash
-# In production, download assets from Studio
-curl -o assets/digia.zip "https://studio.digia.io/api/assets/download?key=YOUR_KEY"
-unzip assets/digia.zip -d assets/
-```
+3. **Check component creation methods:**
+The demo uses:
+- `DUIFactory().createInitialPage()`
+- `DUIFactory().createComponent()`
 
-3. **Use correct init strategy:**
-
-For development, use `NetworkFirst` to always fetch latest:
-
-```dart
-initStrategy: InitStrategy.networkFirst();
-```
+4. **Verify access permissions:**
+Make sure your access key has permission to access the pages.
 
 ---
 
@@ -144,30 +225,25 @@ initStrategy: InitStrategy.networkFirst();
 **Symptoms:**
 App navigates but shows blank screen.
 
-**Cause:** Page not loaded or navigation error.
+**Cause:** Navigation state not set or Digia UI context missing.
 
 **Solution:**
 
-1. **Check console for errors:**
-
-```
+1. **Check console logs:**
+```bash
 flutter run --verbose
 ```
 
-2. **Verify navigation in Studio:**
-
-```json
-{
-  "action": "navigate",
-  "page": "catalog"  // Must match page ID in Studio
-}
-```
-
-3. **Check DUIAppState:**
-
+2. **Verify DUIAppState navigation:**
 ```dart
-print(DUIAppState().getAllState());
+print('Navigation state: ${DUIAppState().getValue('currentPage')}');
 ```
+
+3. **Ensure navigation happens within Digia UI context:**
+Navigation only works inside `DigiaUIAppBuilder` or `DigiaUIApp`.
+
+4. **Check MessageHandlerWrapper:**
+The demo uses `MessageHandlerWrapper` with `DigiaMessageHandlerMixin` for navigation messages.
 
 ---
 
@@ -178,40 +254,30 @@ print(DUIAppState().getAllState());
 **Symptoms:**
 Native code updates state, but Digia pages don't reflect changes.
 
-**Cause:** State not set correctly or page not reactive.
+**Cause:** Incorrect state key or page not reactive.
 
 **Solution:**
 
-1. **Use DUIAppState.update():**
-
+1. **Use DUIAppState.update() correctly:**
 ```dart
-// ✅ Correct
+// ✅ Correct - used throughout the demo
 DUIAppState().update('cartItemCount', 5);
-
-// ❌ Wrong
-someOtherStateManager.set('cartItemCount', 5);
+DUIAppState().update('user', {'name': 'John', 'id': '123'});
 ```
 
-2. **Verify page uses reactive bindings in Studio:**
-
+2. **Verify Digia Studio page bindings:**
 ```json
 {
   "widget": "Text",
   "props": {
-    "text": "Cart: {{state.cartItemCount}}"  // Double curly braces
+    "text": "Cart: {{state.cartItemCount}}"
   }
 }
 ```
 
-3. **Check state key matches:**
-
-```dart
-// Native code
-DUIAppState().update('cartItemCount', 5);
-
-// Studio
-{{state.cartItemCount}}  // Must match key exactly
-```
+3. **Check state key matches exactly:**
+Native: `DUIAppState().update('cartItemCount', 5)`
+Studio: `{{state.cartItemCount}}`
 
 ---
 
@@ -224,19 +290,47 @@ Digia pages update state, but native screens don't update.
 
 **Solution:**
 
-**Add listener in native screen:**
+**Use DUIAppState.listen() for reactive updates:**
 
 ```dart
-@override
-void initState() {
-  super.initState();
-  
-  // Listen to state changes
-  DUIAppState().addListener('cartItemCount', (value) {
-    setState(() {
-      _cartCount = value ?? 0;
+class _MyWidgetState extends State<MyWidget> {
+  late StreamSubscription _subscription;
+  int _cartCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscription = DUIAppState().listen('cartItemCount', (value) {
+      setState(() => _cartCount = value ?? 0);
     });
-  });
+  }
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Badge(label: Text('$_cartCount'), child: Icon(Icons.shopping_cart));
+  }
+}
+```
+
+**Alternative: Use message handlers (as implemented in demo):**
+
+```dart
+class _MyWidgetState extends State<MyWidget> with DigiaMessageHandlerMixin {
+  @override
+  void initState() {
+    super.initState();
+    addMessageHandler('cart_updated', (message) {
+      setState(() {
+        // Update based on message
+      });
+    });
+  }
 }
 ```
 
@@ -244,7 +338,7 @@ void initState() {
 
 ## Message Bus Issues
 
-### Message Bus Handler Not Called
+### Message Handler Not Called
 
 **Symptoms:**
 Digia page sends message, but handler doesn't execute.
@@ -253,202 +347,72 @@ Digia page sends message, but handler doesn't execute.
 
 **Solution:**
 
-1. **Check channel name matches:**
+1. **Check channel names match:**
+
+The demo uses `DigiaMessageHandlerMixin` in `MessageHandlerWrapper`:
 
 ```dart
-// In message_bus_adapter.dart
-messageBus.on('start_payment', (params) { ... });
+// From lib/main.dart
+addMessageHandler('start_payment', (message) {
+  widget.messageHandler.send(message, context);
+});
 
-// In Digia Studio
+addMessageHandler('update_cart', (message) {
+  widget.messageHandler.send(message, context);
+});
+```
+
+2. **Verify Digia Studio action:**
+```json
 {
-  "action": "messageBus",
-  "channel": "start_payment"  // Must match exactly
+  "action": "callExternalMethod",
+  "channel": "start_payment",
+  "data": {"amount": "{{totalPrice}}"}
 }
 ```
 
-2. **Verify message bus is initialized:**
-
-```dart
-// In main.dart
-final messageBus = AppMessageBus(analytics: analytics);
-
-await DigiaConfig.initialize(
-  messageBus: messageBus,  // Pass to Digia
-);
-```
-
-3. **Check handler is registered before page loads:**
-
-```dart
-void main() async {
-  final messageBus = AppMessageBus();
-  messageBus.registerHandlers(); // Register before Digia init
-  
-  await DigiaConfig.initialize(messageBus: messageBus);
-}
-```
+3. **Ensure MessageHandlerWrapper is in widget tree:**
+The demo wraps `HomePage` with `MessageHandlerWrapper`.
 
 ---
 
-### Error: "Unknown message bus channel"
+### Error: "Unknown message channel"
 
 **Symptoms:**
 ```
 Error: Unknown channel: custom_action
 ```
 
-**Cause:** Channel not handled in message bus adapter.
+**Cause:** Channel not handled in message handler.
 
 **Solution:**
 
-**Add handler in message_bus_adapter.dart:**
+**Add handler to MessageHandlerWrapper:**
 
 ```dart
-void on(String channel, Map<String, dynamic> params) {
-  switch (channel) {
-    case 'start_payment':
-      _handlePayment(params);
-      break;
-    
-    case 'custom_action':  // Add your channel
-      _handleCustomAction(params);
-      break;
-    
-    default:
-      print('[MessageBus] Unknown channel: $channel');
+class _MessageHandlerWrapperState extends State<MessageHandlerWrapper>
+    with DigiaMessageHandlerMixin {
+  @override
+  void initState() {
+    super.initState();
+
+    // Existing handlers...
+    addMessageHandler('start_payment', (message) {
+      widget.messageHandler.send(message, context);
+    });
+
+    // Add your custom handler
+    addMessageHandler('custom_action', (message) {
+      print('[MessageHandler] Custom action: $message');
+      _handleCustomAction(message);
+    });
+  }
+
+  void _handleCustomAction(dynamic message) {
+    // Your custom logic here
   }
 }
 ```
-
----
-
-## Payment Integration Issues
-
-### Payment Always Failing
-
-**Symptoms:**
-All payment attempts fail.
-
-**Cause:** Mock payment adapter has random failures, or real payment SDK not configured.
-
-**Solution:**
-
-1. **For demo mode (mock adapter):**
-
-The mock adapter has 90% success rate. Try multiple times.
-
-```dart
-// In payment_adapter.dart (demo)
-final success = DateTime.now().second % 10 != 0; // 90% success
-```
-
-2. **For production:**
-
-Configure real Gokwik API keys:
-
-```dart
-// In payment_adapter.dart
-final response = await http.post(
-  Uri.parse('https://api.gokwik.co/payment/initiate'),
-  headers: {
-    'Authorization': 'Bearer YOUR_GOKWIK_API_KEY',
-  },
-);
-```
-
----
-
-### Payment Screen Not Showing
-
-**Symptoms:**
-Payment initiation doesn't show payment UI.
-
-**Cause:** Payment URL not opened.
-
-**Solution:**
-
-**Open payment URL in webview:**
-
-```dart
-final result = await paymentAdapter.startPayment(...);
-
-if (result['success']) {
-  final paymentUrl = result['paymentUrl'];
-  
-  // Open in webview or browser
-  await launchUrl(Uri.parse(paymentUrl));
-}
-```
-
----
-
-## Asset Loading Issues
-
-### Images Not Loading
-
-**Symptoms:**
-Image widgets show placeholder or broken image icon.
-
-**Cause:** Image URL invalid or network issue.
-
-**Solution:**
-
-1. **Check image URL:**
-
-```dart
-Image.network(
-  'https://example.com/image.jpg',
-  errorBuilder: (context, error, stackTrace) {
-    print('Image load error: $error');
-    return Icon(Icons.error);
-  },
-);
-```
-
-2. **Use cached network image:**
-
-```yaml
-dependencies:
-  cached_network_image: ^3.3.0
-```
-
-```dart
-CachedNetworkImage(
-  imageUrl: 'https://example.com/image.jpg',
-  placeholder: (context, url) => CircularProgressIndicator(),
-  errorWidget: (context, url, error) => Icon(Icons.error),
-);
-```
-
----
-
-### Fonts Not Loading
-
-**Symptoms:**
-Custom fonts not displaying.
-
-**Cause:** Font files not included in pubspec.yaml.
-
-**Solution:**
-
-1. **Add fonts to pubspec.yaml:**
-
-```yaml
-flutter:
-  fonts:
-    - family: CustomFont
-      fonts:
-        - asset: assets/fonts/CustomFont-Regular.ttf
-        - asset: assets/fonts/CustomFont-Bold.ttf
-          weight: 700
-```
-
-2. **Use in code:**
-
-```dart
-TextStyle(fontFamily: 'CustomFont')
-```
-
 ---
 
 ## Build Issues
@@ -464,22 +428,18 @@ Error: Version solving failed.
 
 **Solution:**
 
-1. **Clean and get dependencies:**
-
+1. **Clean and reinstall:**
 ```bash
 flutter clean
 flutter pub get
 ```
 
 2. **Update packages:**
-
 ```bash
 flutter pub upgrade
 ```
 
-3. **Check pubspec.yaml for conflicts:**
-
-Remove version constraints or use compatible versions.
+3. **Check pubspec.yaml conflicts**
 
 ---
 
@@ -490,12 +450,11 @@ Remove version constraints or use compatible versions.
 Error: INTERNET permission not found
 ```
 
-**Cause:** Required permissions missing from AndroidManifest.xml.
+**Cause:** Required permissions missing.
 
 **Solution:**
 
-**Add permissions to android/app/src/main/AndroidManifest.xml:**
-
+**Add to android/app/src/main/AndroidManifest.xml:**
 ```xml
 <uses-permission android:name="android.permission.INTERNET" />
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -510,29 +469,24 @@ Error: INTERNET permission not found
 **Symptoms:**
 App crashes immediately after launch.
 
-**Cause:** Initialization error or missing dependency.
+**Cause:** Initialization failure or missing configuration.
 
 **Solution:**
 
 1. **Check logs:**
-
 ```bash
 flutter run --verbose
 ```
 
-2. **Verify Firebase initialization:**
-
+2. **Verify AppConfig.loadConfig():**
 ```dart
-// In main.dart
-await Firebase.initializeApp(); // Must be before runApp()
+// Must be called first in main()
+await AppConfig.loadConfig();
 ```
 
-3. **Check for null safety issues:**
+3. **Check assets/app_config.json exists**
 
-```dart
-final user = DUIAppState().getValue('user');
-print(user?['name']); // Use null-aware operators
-```
+4. **Verify DigiaConfig.initialize() succeeds**
 
 ---
 
@@ -541,18 +495,17 @@ print(user?['name']); // Use null-aware operators
 **Symptoms:**
 Changes not reflected after hot reload.
 
-**Cause:** State persisted or hot reload limitation.
+**Cause:** State persistence or hot reload limitations.
 
 **Solution:**
 
 1. **Use hot restart instead:**
+Press `Shift + R` in terminal.
 
-Press `Shift + R` in terminal or click hot restart button.
-
-2. **For state issues, clear state:**
-
+2. **Clear problematic state:**
 ```dart
-DUIAppState().clearAllState();
+DUIAppState().update('user', null);
+DUIAppState().update('cartItemCount', 0);
 ```
 
 ---
@@ -564,50 +517,53 @@ DUIAppState().clearAllState();
 **Symptoms:**
 App takes long to start.
 
-**Cause:** NetworkFirst strategy or heavy initialization.
+**Cause:** Digia UI initialization or heavy setup.
 
 **Solution:**
 
-1. **Use CacheFirst strategy:**
+1. **Check DigiaConfig.initialize() timing**
 
+2. **Move heavy initialization after app start:**
 ```dart
-initStrategy: InitStrategy.cacheFirst(
-  backgroundRefresh: true,
-);
-```
-
-2. **Lazy load heavy dependencies:**
-
-```dart
-// Load Firebase messaging after app starts
 Future.delayed(Duration(seconds: 2), () {
-  FirebaseMessaging.instance.requestPermission();
+  // Initialize heavy services
 });
 ```
+
+3. **Ensure no blocking operations in init**
 
 ---
 
 ### Memory Leaks
 
 **Symptoms:**
-App memory usage keeps increasing.
+Memory usage keeps increasing.
 
-**Cause:** Listeners not disposed.
+**Cause:** Undisposed listeners or subscriptions.
 
 **Solution:**
 
-1. **Dispose listeners:**
+**Always dispose DUIAppState listeners:**
 
 ```dart
-@override
-void dispose() {
-  DUIAppState().removeListener('cartItemCount');
-  _controller.dispose();
-  super.dispose();
+class _MyWidgetState extends State<MyWidget> {
+  late StreamSubscription _subscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscription = DUIAppState().listen('cartItemCount', (value) {
+      setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription.cancel(); // ✅ Essential
+    super.dispose();
+  }
 }
 ```
-
-2. **Use weak references for long-lived objects**
 
 ---
 
@@ -619,23 +575,20 @@ void dispose() {
 flutter run --verbose
 ```
 
-### Check Digia SDK Logs
+### Check Demo-Specific Logs
+
+Look for these debug messages:
+- `[ProductHub] Starting Digia UI Demo`
+- `[ProductHub] Environment: dev`
+- `[DummyAnalyticsAdapter]` messages
+- `[MessageHandler]` messages
+
+### Debug State Values
 
 ```dart
-// In app_config.dart
-AppConfig.enableDebugLogs = true;
-
-// In digia_config.dart
-Flavor.debug(
-  logLevel: LogLevel.verbose,
-);
-```
-
-### Print State for Debugging
-
-```dart
-print('All state: ${DUIAppState().getAllState()}');
 print('User: ${DUIAppState().getValue('user')}');
+print('Cart: ${DUIAppState().getValue('cartItemCount')}');
+print('Logged in: ${DUIAppState().getValue('isLoggedIn')}');
 ```
 
 ---
@@ -644,7 +597,6 @@ print('User: ${DUIAppState().getValue('user')}');
 
 - **Main README:** [../README.md](../README.md)
 - **Getting Started:** [getting-started.md](getting-started.md)
-- **State Management:** [state-management.md](state-management.md)
 - **Third-Party SDKs:** [third-party-sdks.md](third-party-sdks.md)
 - **Digia Docs:** https://docs.digia.io
 - **Digia Support:** support@digia.io
