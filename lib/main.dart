@@ -16,13 +16,14 @@ import 'dummy_adapters/message_handler.dart';
 /// Comprehensive demo of Digia UI integration patterns using a single Cart Screen
 ///
 /// DIGIA UI TOUCHPOINTS DEMONSTRATED:
-/// 1. Component Creation - DUIFactory().createComponent()
-/// 2. Custom Widget Registration - Extend Digia with Flutter widgets
-/// 3. Event Handling - onTap, onChange, form submissions
-/// 4. PostMessage -  Native Digia communication
-/// 5. State Management - DUIAppState for shared state
-/// 6. Message Handling - DigiaMessageHandlerMixin
-/// 7. Analytics - Event tracking integration
+/// See individual documentation files for detailed guides:
+/// - [Component Creation](docs/component-creation.md) - DUIFactory().createComponent() and createInitialPage()
+/// - [Custom Widget Registration](docs/custom-widget-registration.md) - Extend Digia with Flutter widgets
+/// - [Event Handling](docs/event-handling.md) - onTap, onChange, form submissions
+/// - [PostMessage Communication](docs/postmessage-communication.md) - Native Digia communication & DigiaMessageHandlerMixin
+/// - [State Management](docs/state-management.md) - DUIAppState for shared state
+/// - [Analytics Integration](docs/analytics-integration.md) - fire Event tracking integration
+/// - [Environment Variables](docs/design-system-access.md) - access or set environment variables
 ///
 /// INTEGRATION METHODS:
 /// - Method 1: DigiaUIAppBuilder (automatic init, simpler)

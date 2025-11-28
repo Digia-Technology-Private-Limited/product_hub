@@ -264,8 +264,6 @@ product_hub/
 ## 📚 Documentation
 
 - [Getting Started Guide](docs/getting-started.md) - Detailed setup instructions
-- [Flavors Guide](docs/flavors-guide.md) - Environment and flavor configuration
-- [State Management](docs/state-management.md) - State patterns and examples
 - [Custom Widgets Guide](docs/custom-widgets-guide.md) - Registering native widgets for Digia Studio
 - [Third-Party SDKs](docs/third-party-sdks.md) - SDK integration guides
 - [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
