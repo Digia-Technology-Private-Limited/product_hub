@@ -8,6 +8,7 @@ import 'config/app_config.dart';
 import 'config/digia_config.dart';
 import 'dummy_adapters/analytics_adapter.dart';
 import 'dummy_adapters/message_handler.dart';
+import 'services/app_links_handler.dart';
 
 // ====================================================================================
 // PRODUCT HUB - DIGIA UI SDK INTEGRATION DEMO
@@ -164,6 +165,16 @@ class _ManualInitExampleState extends State<ManualInitExample> {
     super.initState();
     // Manually initialize Digia UI SDK
     _initFuture = DigiaConfig.initialize();
+    // Initialize deep links here - context is available
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AppLinksHandler.initialize(context);
+    });
+  }
+
+  @override
+  void dispose() {
+    AppLinksHandler.dispose();
+    super.dispose();
   }
 
   @override
